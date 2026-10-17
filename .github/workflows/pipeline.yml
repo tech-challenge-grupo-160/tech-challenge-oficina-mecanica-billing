@@ -23,7 +23,7 @@ permissions:
 jobs:
   pipeline:
     name: Pipeline
-    uses: tech-challenge-grupo-160/tech-challenge-pipelines/.github/workflows/servico-dotnet.yml@main
+    uses: tech-challenge-grupo-160/tech-challenge-pipelines/.github/workflows/servico-dotnet.yml@v1
     with:
       servico: oficina-mecanica-billing
       solucao: Fiap.TechChallenge.OficinaMecanica.Billing.slnx
