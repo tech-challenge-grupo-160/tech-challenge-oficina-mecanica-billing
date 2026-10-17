@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-mecanica-billing
+  labels:
+    app: oficina-mecanica-billing
+    app.kubernetes.io/part-of: oficina-mecanica
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oficina-mecanica-billing
+  template:
+    metadata:
+      labels:
+        app: oficina-mecanica-billing
+        app.kubernetes.io/part-of: oficina-mecanica
+    spec:
+      containers:
+        - name: api
+          image: oficina-mecanica-billing
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: oficina-mecanica-billing-config
+          env:
+            - name: DD_SERVICE
+              value: oficina-mecanica-billing
+            - name: DD_ENV
+              value: __AMBIENTE__
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          # readiness inclui as dependencias; liveness so confere o processo,
+          # para uma dependencia fora do ar nao reiniciar o pod a toa.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

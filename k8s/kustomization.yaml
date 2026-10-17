@@ -1,0 +1,19 @@
+# Manifests do Billing Service no EKS, no mesmo namespace do OS Service.
+#
+# A imagem vem do ECR com tag igual ao SHA do commit. O deploy substitui o valor
+# abaixo; o placeholder nunca e aplicado como esta.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: oficina-mecanica
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+
+images:
+  - name: oficina-mecanica-billing
+    newName: oficina-mecanica-billing
+    newTag: placeholder

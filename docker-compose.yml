@@ -1,0 +1,19 @@
+# Sobe so a API do servico. O banco e a mensageria entram no compose junto com
+# as tasks que os introduzem (LocalStack para SQS/SNS/DynamoDB, ver ADR-0005).
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./docker/backend/Dockerfile
+      target: runtime
+    image: fiap-techchallenge-oficina-mecanica-billing:latest
+    container_name: oficina-mecanica-billing-dev
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      # A imagem roda com o Datadog Tracer habilitado, mas o compose local nao
+      # sobe um Datadog Agent.
+      DD_TRACE_ENABLED: "false"
+    ports:
+      - "${API_PORT:-8081}:8080"
+    restart: unless-stopped

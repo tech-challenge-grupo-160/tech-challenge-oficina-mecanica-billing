@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[Fiap.TechChallenge.OficinaMecanica.Billing.Api]*,[Fiap.TechChallenge.OficinaMecanica.Billing.Application]*,[Fiap.TechChallenge.OficinaMecanica.Billing.Domain]*,[Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure]*</Include>
+          <Exclude>[Fiap.TechChallenge.OficinaMecanica.Billing.Test.UnitTests]*,[Fiap.TechChallenge.OficinaMecanica.Billing.Test.IntegrationTests]*</Exclude>
+          <ExcludeByAttribute>CompilerGeneratedAttribute,GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
