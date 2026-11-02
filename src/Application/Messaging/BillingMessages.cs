@@ -1,25 +1,24 @@
 namespace Fiap.TechChallenge.OficinaMecanica.Billing.Application.Messaging;
 
-public sealed record DiagnosticoConcluidoMessage(
+public sealed record GerarOrcamentoMessage(
     Guid MessageId,
     Guid CorrelationId,
     DateTimeOffset OcorridoEm,
     int OrdemServicoId,
     int DiagnosticoId,
-    string Status,
     string ParecerTecnico,
-    IReadOnlyCollection<ServicoDiagnosticoConcluidoMessage> Servicos,
-    IReadOnlyCollection<PecaDiagnosticoConcluidoMessage> Pecas,
-    DateTimeOffset ConcluidoEm,
+    IReadOnlyCollection<ServicoGerarOrcamentoMessage> Servicos,
+    IReadOnlyCollection<PecaGerarOrcamentoMessage> Pecas,
+    DateTimeOffset DiagnosticoConcluidoEm,
     int Versao = 1);
 
-public sealed record ServicoDiagnosticoConcluidoMessage(
+public sealed record ServicoGerarOrcamentoMessage(
     int ServicoId,
     string Nome,
     decimal Preco,
     int TempoEstimado);
 
-public sealed record PecaDiagnosticoConcluidoMessage(
+public sealed record PecaGerarOrcamentoMessage(
     int PecaId,
     string Nome,
     int Quantidade,

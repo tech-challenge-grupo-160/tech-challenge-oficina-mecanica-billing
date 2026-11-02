@@ -6,23 +6,22 @@ namespace Fiap.TechChallenge.OficinaMecanica.Billing.Test.UnitTests.Units.Applic
 public class BillingMessagesTests
 {
     [Fact]
-    public void DiagnosticoConcluido_DevePreservarContratoRecebidoDaExecucao()
+    public void GerarOrcamento_DevePreservarContratoRecebidoDoOrquestrador()
     {
         var messageId = Guid.NewGuid();
         var correlationId = Guid.NewGuid();
         var ocorridoEm = DateTimeOffset.UtcNow;
         var concluidoEm = ocorridoEm.AddMinutes(-1);
 
-        var message = new DiagnosticoConcluidoMessage(
+        var message = new GerarOrcamentoMessage(
             messageId,
             correlationId,
             ocorridoEm,
             3007,
             1,
-            "Concluido",
             "Pastilhas desgastadas.",
-            [new ServicoDiagnosticoConcluidoMessage(1000, "Alinhamento", 150m, 30)],
-            [new PecaDiagnosticoConcluidoMessage(1000, "Pastilha de Freio", 2, 45m)],
+            [new ServicoGerarOrcamentoMessage(1000, "Alinhamento", 150m, 30)],
+            [new PecaGerarOrcamentoMessage(1000, "Pastilha de Freio", 2, 45m)],
             concluidoEm);
 
         message.MessageId.Should().Be(messageId);
@@ -30,13 +29,12 @@ public class BillingMessagesTests
         message.OcorridoEm.Should().Be(ocorridoEm);
         message.OrdemServicoId.Should().Be(3007);
         message.DiagnosticoId.Should().Be(1);
-        message.Status.Should().Be("Concluido");
         message.ParecerTecnico.Should().Be("Pastilhas desgastadas.");
         message.Servicos.Single().Should().Be(
-            new ServicoDiagnosticoConcluidoMessage(1000, "Alinhamento", 150m, 30));
+            new ServicoGerarOrcamentoMessage(1000, "Alinhamento", 150m, 30));
         message.Pecas.Single().Should().Be(
-            new PecaDiagnosticoConcluidoMessage(1000, "Pastilha de Freio", 2, 45m));
-        message.ConcluidoEm.Should().Be(concluidoEm);
+            new PecaGerarOrcamentoMessage(1000, "Pastilha de Freio", 2, 45m));
+        message.DiagnosticoConcluidoEm.Should().Be(concluidoEm);
         message.Versao.Should().Be(1);
     }
 

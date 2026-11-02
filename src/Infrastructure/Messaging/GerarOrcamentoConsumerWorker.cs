@@ -13,11 +13,11 @@ using Microsoft.Extensions.Options;
 namespace Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure.Messaging;
 
 [ExcludeFromCodeCoverage]
-public sealed class DiagnosticoConcluidoConsumerWorker(
+public sealed class GerarOrcamentoConsumerWorker(
     IServiceScopeFactory scopeFactory,
     IAmazonSQS sqs,
     IOptions<MessagingOptions> options,
-    ILogger<DiagnosticoConcluidoConsumerWorker> logger) : BackgroundService
+    ILogger<GerarOrcamentoConsumerWorker> logger) : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -32,7 +32,7 @@ public sealed class DiagnosticoConcluidoConsumerWorker(
             {
                 var response = await sqs.ReceiveMessageAsync(new ReceiveMessageRequest
                 {
-                    QueueUrl = options.Value.DiagnosticoConcluidoQueueUrl,
+                    QueueUrl = options.Value.GerarOrcamentoQueueUrl,
                     MaxNumberOfMessages = 10,
                     WaitTimeSeconds = 10,
                     VisibilityTimeout = 30
@@ -47,7 +47,7 @@ public sealed class DiagnosticoConcluidoConsumerWorker(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Falha ao consumir diagnosticos concluidos.");
+                logger.LogError(exception, "Falha ao consumir comandos de geracao de orcamento.");
                 await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
             }
         }
@@ -57,41 +57,39 @@ public sealed class DiagnosticoConcluidoConsumerWorker(
     {
         try
         {
-            var evento = JsonSerializer.Deserialize<DiagnosticoConcluidoMessage>(message.Body, JsonOptions)
-                ?? throw new InvalidOperationException("Evento DiagnosticoConcluido invalido.");
-            if (evento.Versao != 1)
-                throw new InvalidOperationException($"Versao de evento nao suportada: {evento.Versao}.");
-            if (!string.Equals(evento.Status, "Concluido", StringComparison.Ordinal))
-                throw new InvalidOperationException($"Status de diagnostico invalido: {evento.Status}.");
+            var comando = JsonSerializer.Deserialize<GerarOrcamentoMessage>(message.Body, JsonOptions)
+                ?? throw new InvalidOperationException("Comando GerarOrcamento invalido.");
+            if (comando.Versao != 1)
+                throw new InvalidOperationException($"Versao de comando nao suportada: {comando.Versao}.");
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
             await sender.Send(new GerarOrcamentoCommand(
-                evento.MessageId,
-                evento.CorrelationId,
-                evento.OrdemServicoId,
-                evento.DiagnosticoId,
-                evento.ParecerTecnico,
-                evento.Servicos.Select(item => new ServicoOrcamentoCommand(
+                comando.MessageId,
+                comando.CorrelationId,
+                comando.OrdemServicoId,
+                comando.DiagnosticoId,
+                comando.ParecerTecnico,
+                comando.Servicos.Select(item => new ServicoOrcamentoCommand(
                     item.ServicoId,
                     item.Nome,
                     item.Preco,
                     item.TempoEstimado)).ToArray(),
-                evento.Pecas.Select(item => new PecaOrcamentoCommand(
+                comando.Pecas.Select(item => new PecaOrcamentoCommand(
                     item.PecaId,
                     item.Nome,
                     item.Quantidade,
                     item.Preco)).ToArray(),
-                evento.ConcluidoEm), cancellationToken);
+                comando.DiagnosticoConcluidoEm), cancellationToken);
 
             await sqs.DeleteMessageAsync(
-                options.Value.DiagnosticoConcluidoQueueUrl,
+                options.Value.GerarOrcamentoQueueUrl,
                 message.ReceiptHandle,
                 cancellationToken);
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Falha ao processar mensagem SQS {SqsMessageId}.", message.MessageId);
+            logger.LogError(exception, "Falha ao processar comando SQS {SqsMessageId}.", message.MessageId);
         }
     }
 }
