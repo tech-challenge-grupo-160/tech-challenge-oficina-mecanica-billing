@@ -31,7 +31,7 @@ public static class DependencyInjection
 
         services.AddScoped<IOrcamentoRepository, DynamoDbOrcamentoRepository>();
         services.AddHostedService<DynamoDbTableInitializer>();
-        services.AddHostedService<DiagnosticoConcluidoConsumerWorker>();
+        services.AddHostedService<GerarOrcamentoConsumerWorker>();
         services.AddHostedService<OutboxSnsPublisherWorker>();
         services.AddHealthChecks();
 

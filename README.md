@@ -8,8 +8,8 @@ Microsserviço de orçamento e pagamento da oficina mecânica, desenvolvido na F
 
 O Billing já executa o primeiro fluxo assíncrono de orçamento:
 
-1. consome `DiagnosticoConcluidoMessage` da fila SQS `billing-diagnostico-concluido`;
-2. calcula os totais usando os snapshots de serviços e peças enviados pela Execução;
+1. consome `GerarOrcamentoMessage` da fila SQS `billing-gerar-orcamento`;
+2. calcula os totais usando os snapshots de serviços e peças enviados pelo OS Service;
 3. grava `Orcamento`, `Inbox` e `Outbox` atomicamente no DynamoDB;
 4. trata reprocessamentos de forma idempotente;
 5. publica `OrcamentoGeradoMessage` no tópico SNS `oficina-eventos`;
@@ -19,9 +19,11 @@ Aprovação/recusa, criação da cobrança e integração com Mercado Pago ficam
 
 ## Contratos
 
-### Evento consumido
+### Comando consumido
 
-`DiagnosticoConcluidoMessage`, versão 1, publicado pelo microsserviço de Execução. O evento contém o parecer técnico e os snapshots comerciais dos serviços e peças diagnosticados.
+`GerarOrcamentoMessage`, versão 1, enviado pelo OS Service após o recebimento
+do diagnóstico concluído. O comando contém o parecer técnico e os snapshots
+comerciais dos serviços e peças diagnosticados.
 
 ### Evento publicado
 

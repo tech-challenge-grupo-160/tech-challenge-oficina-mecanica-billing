@@ -121,7 +121,7 @@ public sealed class DynamoDbOrcamentoRepository(
             ["EntityType"] = new("Inbox"),
             ["MessageId"] = new(messageId.ToString()),
             ["CorrelationId"] = new(correlationId.ToString()),
-            ["Tipo"] = new(nameof(DiagnosticoConcluidoMessage)),
+            ["Tipo"] = new(nameof(GerarOrcamentoMessage)),
             ["ProcessadoEm"] = new(DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture))
         };
 
