@@ -14,4 +14,11 @@ public interface IOrcamentoRepository
     Task<Orcamento?> ObterPorOrdemServicoIdAsync(
         int ordemServicoId,
         CancellationToken cancellationToken);
+
+    Task<(Orcamento Orcamento, bool Alterado)> RegistrarDecisaoAsync(
+        Orcamento orcamento,
+        Guid eventoId,
+        string tipoEvento,
+        string payloadEvento,
+        CancellationToken cancellationToken);
 }

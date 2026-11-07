@@ -14,7 +14,11 @@ public sealed record OrcamentoResponse(
     decimal ValorServicos,
     decimal ValorPecas,
     decimal ValorTotal,
-    DateTimeOffset CriadoEm)
+    DateTimeOffset CriadoEm,
+    DateTimeOffset? RespondidoEm,
+    string? MotivoRecusa,
+    string UrlAprovacao,
+    string UrlRecusa)
 {
     public static OrcamentoResponse From(OrcamentoResult result) => new(
         result.Id,
@@ -36,7 +40,11 @@ public sealed record OrcamentoResponse(
         result.ValorServicos,
         result.ValorPecas,
         result.ValorTotal,
-        result.CriadoEm);
+        result.CriadoEm,
+        result.RespondidoEm,
+        result.MotivoRecusa,
+        $"/api/v1/orcamentos/{result.OrdemServicoId}/{result.Id}/aprovar",
+        $"/api/v1/orcamentos/{result.OrdemServicoId}/{result.Id}/recusar");
 }
 
 public sealed record ItemServicoOrcamentoResponse(

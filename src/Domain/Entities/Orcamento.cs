@@ -11,6 +11,8 @@ public sealed class Orcamento
     public string ParecerTecnico { get; private set; } = null!;
     public string Status { get; private set; } = null!;
     public DateTimeOffset CriadoEm { get; private set; }
+    public DateTimeOffset? RespondidoEm { get; private set; }
+    public string? MotivoRecusa { get; private set; }
     public IReadOnlyCollection<ItemServicoOrcamento> Servicos { get; private set; } = [];
     public IReadOnlyCollection<ItemPecaOrcamento> Pecas { get; private set; } = [];
     public decimal ValorServicos => Servicos.Sum(item => item.Preco);
@@ -62,6 +64,34 @@ public sealed class Orcamento
     public bool CorrespondeAoDiagnostico(Guid correlationId, int diagnosticoId) =>
         CorrelationId == correlationId && DiagnosticoId == diagnosticoId;
 
+    public bool Aprovar(DateTimeOffset respondidoEm)
+    {
+        if (Status == "Aprovado")
+            return false;
+        if (Status != "Gerado")
+            throw new InvalidOperationException($"Orcamento nao pode ser aprovado no status {Status}.");
+
+        Status = "Aprovado";
+        RespondidoEm = respondidoEm;
+        MotivoRecusa = null;
+        return true;
+    }
+
+    public bool Recusar(string motivo, DateTimeOffset respondidoEm)
+    {
+        if (Status == "Recusado")
+            return false;
+        if (Status != "Gerado")
+            throw new InvalidOperationException($"Orcamento nao pode ser recusado no status {Status}.");
+        if (string.IsNullOrWhiteSpace(motivo))
+            throw new ArgumentException("Motivo da recusa e obrigatorio.", nameof(motivo));
+
+        Status = "Recusado";
+        RespondidoEm = respondidoEm;
+        MotivoRecusa = motivo.Trim();
+        return true;
+    }
+
     public static Orcamento Restaurar(
         Guid id,
         Guid correlationId,
@@ -71,7 +101,9 @@ public sealed class Orcamento
         string status,
         DateTimeOffset criadoEm,
         IReadOnlyCollection<ItemServicoOrcamento> servicos,
-        IReadOnlyCollection<ItemPecaOrcamento> pecas) => new()
+        IReadOnlyCollection<ItemPecaOrcamento> pecas,
+        DateTimeOffset? respondidoEm = null,
+        string? motivoRecusa = null) => new()
         {
             Id = id,
             CorrelationId = correlationId,
@@ -80,6 +112,8 @@ public sealed class Orcamento
             ParecerTecnico = parecerTecnico,
             Status = status,
             CriadoEm = criadoEm,
+            RespondidoEm = respondidoEm,
+            MotivoRecusa = motivoRecusa,
             Servicos = servicos,
             Pecas = pecas
         };

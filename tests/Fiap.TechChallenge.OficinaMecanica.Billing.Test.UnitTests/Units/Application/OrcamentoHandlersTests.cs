@@ -121,6 +121,65 @@ public class OrcamentoHandlersTests
             .Validate(new ObterOrcamentoPorOrdemQuery(0)).IsValid.Should().BeFalse();
     }
 
+    [Fact]
+    public void ResponderValidator_DeveExigirMotivoSomenteNaRecusa()
+    {
+        var validator = new ResponderOrcamentoCommandValidator();
+        var orcamentoId = Guid.NewGuid();
+
+        validator.Validate(new ResponderOrcamentoCommand(3007, orcamentoId, true, null))
+            .IsValid.Should().BeTrue();
+        validator.Validate(new ResponderOrcamentoCommand(3007, orcamentoId, false, null))
+            .IsValid.Should().BeFalse();
+        validator.Validate(new ResponderOrcamentoCommand(
+                0, Guid.Empty, false, new string('x', 501)))
+            .IsValid.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, "Aprovado", nameof(OrcamentoAprovadoMessage))]
+    [InlineData(false, "Recusado", nameof(OrcamentoRecusadoMessage))]
+    public async Task Responder_DevePersistirDecisaoEPublicarEvento(
+        bool aprovado,
+        string status,
+        string tipoEvento)
+    {
+        var orcamento = CriarOrcamento(Guid.NewGuid(), 1);
+        var repository = new Mock<IOrcamentoRepository>();
+        repository.Setup(item => item.ObterPorOrdemServicoIdAsync(
+                3007, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orcamento);
+        repository.Setup(item => item.RegistrarDecisaoAsync(
+                orcamento, It.IsAny<Guid>(), tipoEvento, It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((orcamento, true));
+
+        var result = await new ResponderOrcamentoCommandHandler(repository.Object)
+            .Handle(new ResponderOrcamentoCommand(
+                3007, orcamento.Id, aprovado,
+                aprovado ? null : "Valor nao aprovado."), CancellationToken.None);
+
+        result.Status.Should().Be(status);
+        result.RespondidoEm.Should().NotBeNull();
+        repository.VerifyAll();
+    }
+
+    [Fact]
+    public async Task Responder_DeveOcultarOrcamentoComIdentificadorIncorreto()
+    {
+        var orcamento = CriarOrcamento(Guid.NewGuid(), 1);
+        var repository = new Mock<IOrcamentoRepository>();
+        repository.Setup(item => item.ObterPorOrdemServicoIdAsync(
+                3007, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orcamento);
+
+        var action = () => new ResponderOrcamentoCommandHandler(repository.Object)
+            .Handle(new ResponderOrcamentoCommand(
+                3007, Guid.NewGuid(), true, null), CancellationToken.None);
+
+        await action.Should().ThrowAsync<ServiceNotFoundException>();
+    }
+
     private static GerarOrcamentoCommand CriarCommand() => new(
         Guid.NewGuid(), Guid.NewGuid(), 3007, 1, "Pastilhas desgastadas.",
         [new ServicoOrcamentoCommand(1000, "Alinhamento", 150m, 30)],
