@@ -42,4 +42,15 @@ public sealed class InMemoryOrcamentoRepository : IOrcamentoRepository
         int ordemServicoId,
         CancellationToken cancellationToken) =>
         Task.FromResult(Orcamento?.OrdemServicoId == ordemServicoId ? Orcamento : null);
+
+    public Task<(Orcamento Orcamento, bool Alterado)> RegistrarDecisaoAsync(
+        Orcamento orcamento,
+        Guid eventoId,
+        string tipoEvento,
+        string payloadEvento,
+        CancellationToken cancellationToken)
+    {
+        Orcamento = orcamento;
+        return Task.FromResult((orcamento, true));
+    }
 }

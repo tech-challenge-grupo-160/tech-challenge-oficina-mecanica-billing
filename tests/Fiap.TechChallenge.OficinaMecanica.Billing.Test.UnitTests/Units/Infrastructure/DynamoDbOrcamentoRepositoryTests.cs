@@ -122,6 +122,29 @@ public class DynamoDbOrcamentoRepositoryTests
         await action.Should().ThrowAsync<InvalidOperationException>();
     }
 
+    [Fact]
+    public async Task Decidir_DeveAtualizarOrcamentoEOutboxAtomicamente()
+    {
+        TransactWriteItemsRequest? request = null;
+        var orcamento = CriarOrcamento();
+        orcamento.Aprovar(DateTimeOffset.UtcNow);
+        var dynamoDb = new Mock<IAmazonDynamoDB>();
+        dynamoDb.Setup(client => client.TransactWriteItemsAsync(
+                It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((value, _) => request = value)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+
+        var result = await CriarRepository(dynamoDb).RegistrarDecisaoAsync(
+            orcamento, Guid.NewGuid(), nameof(OrcamentoAprovadoMessage), "{}",
+            CancellationToken.None);
+
+        result.Alterado.Should().BeTrue();
+        request!.TransactItems.Should().HaveCount(2);
+        request.TransactItems[0].Put.Item["Status"].S.Should().Be("Aprovado");
+        request.TransactItems[0].Put.Item.Should().ContainKey("RespondidoEm");
+        request.TransactItems[1].Put.Item["Tipo"].S.Should().Be(nameof(OrcamentoAprovadoMessage));
+    }
+
     private static DynamoDbOrcamentoRepository CriarRepository(Mock<IAmazonDynamoDB> dynamoDb) =>
         new(dynamoDb.Object, Options.Create(new DynamoDbOptions { TableName = "oficina-billing-test" }));
 

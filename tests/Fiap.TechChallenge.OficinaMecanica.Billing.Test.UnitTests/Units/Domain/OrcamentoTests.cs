@@ -131,6 +131,35 @@ public class OrcamentoTests
         orcamento.ValorTotal.Should().Be(35m);
     }
 
+    [Fact]
+    public void Aprovar_DeveSerIdempotenteEBloquearDecisaoContraria()
+    {
+        var orcamento = CriarValido(Guid.NewGuid());
+        var respondidoEm = DateTimeOffset.UtcNow;
+
+        orcamento.Aprovar(respondidoEm).Should().BeTrue();
+        orcamento.Aprovar(respondidoEm.AddMinutes(1)).Should().BeFalse();
+        orcamento.Status.Should().Be("Aprovado");
+        orcamento.RespondidoEm.Should().Be(respondidoEm);
+        var recusar = () => orcamento.Recusar("Mudei de ideia", respondidoEm);
+        recusar.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Recusar_DeveExigirMotivoESerIdempotente()
+    {
+        var semMotivo = CriarValido(Guid.NewGuid());
+        var action = () => semMotivo.Recusar(" ", DateTimeOffset.UtcNow);
+        action.Should().Throw<ArgumentException>().WithParameterName("motivo");
+
+        var orcamento = CriarValido(Guid.NewGuid());
+        var respondidoEm = DateTimeOffset.UtcNow;
+        orcamento.Recusar("  Valor nao aprovado.  ", respondidoEm).Should().BeTrue();
+        orcamento.Recusar("Valor nao aprovado.", respondidoEm).Should().BeFalse();
+        orcamento.Status.Should().Be("Recusado");
+        orcamento.MotivoRecusa.Should().Be("Valor nao aprovado.");
+    }
+
     private static Orcamento CriarValido(Guid correlationId) => Orcamento.Gerar(
         correlationId,
         1,
