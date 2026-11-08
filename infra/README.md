@@ -38,6 +38,5 @@ não dispara apply.
 O roteiro PowerShell de provisionamento e validação no AWS Academy, incluindo
 filtros, redrive, criptografia e limpeza/ciclo de vida, está no
 [catálogo de mensageria](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/mensageria/catalogo.md#teste-direto-na-aws-academy-learner-lab).
-O LocalStack citado pela ADR-0005 ainda não está configurado nos arquivos
-disponíveis. O acesso de pods EKS ao SNS/SQS não é validado apenas por criar
-recursos e ainda requer o spike F4-05.
+O acesso de pods EKS ao SNS/SQS não é validado apenas por criar recursos e
+ainda requer o spike F4-05.
