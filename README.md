@@ -38,18 +38,25 @@ comerciais dos serviços e peças diagnosticados.
 ```http
 GET /api/v1/orcamentos/ordem-servico/{ordemServicoId}
 ```
+src/
+  API/              controllers, bootstrap, filtros, ProblemDetails
+  Application/      comandos, consultas e handlers (MediatR), validação
+  Domain/           entidades e regras de negócio
+  Infrastructure/   persistência, mensageria, health checks, logs
+  Shared/           código compartilhado entre camadas (LogTemplate)
+tests/
+  Fiap.TechChallenge.OficinaMecanica.Billing.Test.UnitTests/
+  Fiap.TechChallenge.OficinaMecanica.Billing.Test.IntegrationTests/
+infra/              Terraform SNS/SQS, DLQs e configuração no Secrets Manager
+docker/backend/     Dockerfile (desenvolvimento, build e runtime com o tracer)
+k8s/                Deployment, Service, HPA e ConfigMap (Kustomize)
+```
 
-Retorna o orçamento com parecer, itens, preços congelados e totais. Retorna `404` quando ainda não existe orçamento para a OS.
+A infraestrutura de mensageria e os passos de provisionamento estão em
+[infra/README.md](infra/README.md). O catálogo comum está no
+[repositório OS Service](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/mensageria/catalogo.md).
 
-## Stack
-
-.NET 10, ASP.NET Core, Clean Architecture, MediatR, FluentValidation, Amazon DynamoDB, SNS, SQS, Inbox/Outbox e logs estruturados em JSON.
-
-## Como rodar localmente
-
-O LocalStack compartilhado é iniciado pelo repositório do OS Service. Ele deve estar com SNS, SQS e DynamoDB habilitados e com a fila do Billing provisionada.
-
-No OS Service:
+## Como rodar
 
 ```bash
 docker compose up -d localstack
