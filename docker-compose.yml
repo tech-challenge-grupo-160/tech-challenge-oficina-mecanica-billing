@@ -19,6 +19,7 @@ services:
       Messaging__Region: us-east-1
       Messaging__ServiceUrl: http://host.docker.internal:4566
       Messaging__GerarOrcamentoQueueUrl: http://host.docker.internal:4566/000000000000/billing-gerar-orcamento
+      Messaging__SolicitarPagamentoQueueUrl: http://host.docker.internal:4566/000000000000/billing-solicitar-pagamento
       Messaging__EventosTopicArn: arn:aws:sns:us-east-1:000000000000:oficina-eventos
       AWS_ACCESS_KEY_ID: ${LOCALSTACK_ACCESS_KEY_ID:?Defina LOCALSTACK_ACCESS_KEY_ID no arquivo .env}
       AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_SECRET_ACCESS_KEY:?Defina LOCALSTACK_SECRET_ACCESS_KEY no arquivo .env}
