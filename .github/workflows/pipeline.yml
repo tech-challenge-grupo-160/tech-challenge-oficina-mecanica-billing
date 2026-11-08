@@ -1,0 +1,33 @@
+# CI/CD do servico: chama o pipeline reutilizavel do tech-challenge-pipelines
+# (F4-08). PR roda so build e testes; push na homolog/main publica
+# no ambiente da branch; o disparo manual publica no ambiente escolhido - e
+# assim que se publica em dev.
+name: Pipeline
+
+on:
+  pull_request:
+    branches: [develop, homolog, main]
+  push:
+    branches: [homolog, main]
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: "Ambiente de destino"
+        type: choice
+        options: [desenvolvimento, homologacao, producao]
+        default: desenvolvimento
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    name: Pipeline
+    uses: tech-challenge-grupo-160/tech-challenge-pipelines/.github/workflows/servico-dotnet.yml@v1
+    with:
+      servico: oficina-mecanica-billing
+      solucao: Fiap.TechChallenge.OficinaMecanica.Billing.slnx
+      imagem: billing
+      regiao_aws: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ambiente: ${{ github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.event_name == 'push' && (github.ref_name == 'main' && 'producao' || 'homologacao')) || '' }}
+    secrets: inherit

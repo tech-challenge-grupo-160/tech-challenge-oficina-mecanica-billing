@@ -1,27 +1,42 @@
 # Billing Service — Oficina Mecânica
 
-Microsserviço da Fase 4 do Tech Challenge (FIAP SOAT, Grupo 160).
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=tech-challenge-grupo-160_tech-challenge-oficina-mecanica-billing&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=tech-challenge-grupo-160_tech-challenge-oficina-mecanica-billing) [![Cobertura](https://sonarcloud.io/api/project_badges/measure?project=tech-challenge-grupo-160_tech-challenge-oficina-mecanica-billing&metric=coverage)](https://sonarcloud.io/summary/overall?id=tech-challenge-grupo-160_tech-challenge-oficina-mecanica-billing)
 
-**Responsabilidade:** Orçamento (geração, envio, aprovação e recusa) e pagamento via Mercado Pago.
+Microsserviço de orçamento e pagamento da oficina mecânica, desenvolvido na Fase 4 do Tech Challenge FIAP SOAT pelo Grupo 160.
 
-Faz parte da divisão definida na [ADR-0003](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/adrs/0003-divisao-em-microsservicos.md):
+## Corte funcional atual
 
-| Serviço | Repositório |
-|---|---|
-| OS Service | [tech-challenge-oficina-mecanica](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica) |
-| Billing | [tech-challenge-oficina-mecanica-billing](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica-billing) |
-| Execução | [tech-challenge-oficina-mecanica-execucao](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica-execucao) |
+O Billing já executa o primeiro fluxo assíncrono de orçamento:
 
-> **Estado:** esqueleto inicial ([F4-07](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/138)). O domínio, o banco e a mensageria entram nas próximas tasks do [board da Fase 4](https://github.com/orgs/tech-challenge-grupo-160/projects/5).
+1. consome `GerarOrcamentoMessage` da fila SQS `billing-gerar-orcamento`;
+2. calcula os totais usando os snapshots de serviços e peças enviados pelo OS Service;
+3. grava `Orcamento`, `Inbox` e `Outbox` atomicamente no DynamoDB;
+4. trata reprocessamentos de forma idempotente;
+5. publica `OrcamentoGeradoMessage` no tópico SNS `oficina-eventos`;
+6. disponibiliza a consulta do orçamento por ordem de serviço.
 
-## Stack
+Aprovação/recusa, criação da cobrança e integração com Mercado Pago ficam nos próximos cortes.
 
-.NET 10 · ASP.NET Core · Clean Architecture (API → Application → Domain → Infrastructure) · MediatR com `ValidationBehavior` · FluentValidation · logs em JSON · Datadog .NET Tracer na imagem.
+## Contratos
 
-Banco: Amazon DynamoDB (tabela única), provisionado pela [F4-13](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/144).
+### Comando consumido
 
-## Estrutura
+`GerarOrcamentoMessage`, versão 1, enviado pelo OS Service após o recebimento
+do diagnóstico concluído. O comando contém o parecer técnico e os snapshots
+comerciais dos serviços e peças diagnosticados.
 
+### Evento publicado
+
+`OrcamentoGeradoMessage`, versão 1, contendo:
+
+- identificadores da mensagem, correlação, orçamento, OS e diagnóstico;
+- status do orçamento;
+- valores de serviços, peças e total.
+
+### Endpoint
+
+```http
+GET /api/v1/orcamentos/ordem-servico/{ordemServicoId}
 ```
 src/
   API/              controllers, bootstrap, filtros, ProblemDetails
@@ -44,31 +59,35 @@ A infraestrutura de mensageria e os passos de provisionamento estão em
 ## Como rodar
 
 ```bash
-dotnet run --project src/API/Fiap.TechChallenge.OficinaMecanica.Billing.Api.csproj
+docker compose up -d localstack
 ```
 
-Ou com Docker:
+No Billing:
 
 ```bash
-docker compose up --build
+export LOCALSTACK_ACCESS_KEY_ID=<credencial-local>
+export LOCALSTACK_SECRET_ACCESS_KEY=<credencial-local>
+docker compose up -d --build
 ```
 
-A API sobe em `http://localhost:8081`, com Swagger em `/swagger` no ambiente de desenvolvimento.
-
-| Endpoint | Para quê |
-|---|---|
-| `/health/live` | O processo está de pé (liveness do Kubernetes) |
-| `/health/ready` | O serviço e suas dependências estão prontos (readiness) |
-| `/health` | Relatório completo em JSON |
+A API fica disponível em `http://localhost:8081` e o Swagger em `http://localhost:8081/swagger`.
 
 ## Testes
 
 ```bash
-dotnet test Fiap.TechChallenge.OficinaMecanica.Billing.slnx --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+dotnet test Fiap.TechChallenge.OficinaMecanica.Billing.slnx \
+  --collect:"XPlat Code Coverage" \
+  --settings coverlet.runsettings
 ```
 
-A meta da fase é cobertura mínima de 80%, verificada no SonarCloud ([F4-09](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/140)).
+Os testes cobrem domínio, validações, handlers, idempotência e transação no DynamoDB, contratos de mensagens e endpoint HTTP. A meta do Quality Gate é cobertura mínima de 80% em código novo.
 
-## Fluxo de branches
+## Repositórios relacionados
 
-`feature/*` → `develop` → `homolog` → `main`, com Conventional Commits. Detalhes no [CONTRIBUTING do repositório principal](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/CONTRIBUTING.md).
+| Serviço | Repositório |
+|---|---|
+| OS Service | [tech-challenge-oficina-mecanica](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica) |
+| Billing | [tech-challenge-oficina-mecanica-billing](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica-billing) |
+| Execução | [tech-challenge-oficina-mecanica-execucao](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica-execucao) |
+
+Fluxo de branches: `feature/*` → `develop` → `homolog` → `main`.
