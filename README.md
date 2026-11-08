@@ -32,9 +32,14 @@ src/
 tests/
   Fiap.TechChallenge.OficinaMecanica.Billing.Test.UnitTests/
   Fiap.TechChallenge.OficinaMecanica.Billing.Test.IntegrationTests/
+infra/              Terraform SNS/SQS, DLQs e configuração no Secrets Manager
 docker/backend/     Dockerfile (desenvolvimento, build e runtime com o tracer)
 k8s/                Deployment, Service, HPA e ConfigMap (Kustomize)
 ```
+
+A infraestrutura de mensageria e os passos de provisionamento estão em
+[infra/README.md](infra/README.md). O catálogo comum está no
+[repositório OS Service](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/mensageria/catalogo.md).
 
 ## Como rodar
 
