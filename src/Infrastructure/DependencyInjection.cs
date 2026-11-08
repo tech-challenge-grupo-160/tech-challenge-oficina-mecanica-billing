@@ -30,8 +30,10 @@ public static class DependencyInjection
                 provider.GetRequiredService<IOptions<MessagingOptions>>().Value));
 
         services.AddScoped<IOrcamentoRepository, DynamoDbOrcamentoRepository>();
+        services.AddScoped<IPagamentoRepository, DynamoDbPagamentoRepository>();
         services.AddHostedService<DynamoDbTableInitializer>();
         services.AddHostedService<GerarOrcamentoConsumerWorker>();
+        services.AddHostedService<SolicitarPagamentoConsumerWorker>();
         services.AddHostedService<OutboxSnsPublisherWorker>();
         services.AddHealthChecks();
 

@@ -39,7 +39,10 @@ public sealed class DynamoDbOrcamentoRepository(
                     Put = new Put
                     {
                         TableName = options.Value.TableName,
-                        Item = MapearInbox(mensagemEntradaId, candidato.CorrelationId),
+                        Item = DynamoDbMessageItemFactory.CriarInbox(
+                            mensagemEntradaId,
+                            candidato.CorrelationId,
+                            nameof(GerarOrcamentoMessage)),
                         ConditionExpression = "attribute_not_exists(PK)"
                     }
                 },
@@ -48,7 +51,12 @@ public sealed class DynamoDbOrcamentoRepository(
                     Put = new Put
                     {
                         TableName = options.Value.TableName,
-                        Item = MapearOutbox(eventoSaida),
+                        Item = DynamoDbMessageItemFactory.CriarOutbox(
+                            eventoSaida.MessageId,
+                            eventoSaida.CorrelationId,
+                            nameof(OrcamentoGeradoMessage),
+                            JsonSerializer.Serialize(eventoSaida, JsonOptions),
+                            eventoSaida.OcorridoEm),
                         ConditionExpression = "attribute_not_exists(PK)"
                     }
                 }
@@ -127,7 +135,7 @@ public sealed class DynamoDbOrcamentoRepository(
                     Put = new Put
                     {
                         TableName = options.Value.TableName,
-                        Item = MapearOutbox(
+                        Item = DynamoDbMessageItemFactory.CriarOutbox(
                             eventoId,
                             orcamento.CorrelationId,
                             tipoEvento,
@@ -186,52 +194,6 @@ public sealed class DynamoDbOrcamentoRepository(
 
         return item;
     }
-
-    private static Dictionary<string, AttributeValue> MapearInbox(
-        Guid messageId,
-        Guid correlationId) => new()
-        {
-            ["PK"] = new($"INBOX#{messageId}"),
-            ["SK"] = new("MESSAGE"),
-            ["EntityType"] = new("Inbox"),
-            ["MessageId"] = new(messageId.ToString()),
-            ["CorrelationId"] = new(correlationId.ToString()),
-            ["Tipo"] = new(nameof(GerarOrcamentoMessage)),
-            ["ProcessadoEm"] = new(DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture))
-        };
-
-    private static Dictionary<string, AttributeValue> MapearOutbox(OrcamentoGeradoMessage evento) => new()
-    {
-        ["PK"] = new($"OUTBOX#{evento.MessageId}"),
-        ["SK"] = new("MESSAGE"),
-        ["EntityType"] = new("Outbox"),
-        ["MessageId"] = new(evento.MessageId.ToString()),
-        ["CorrelationId"] = new(evento.CorrelationId.ToString()),
-        ["Tipo"] = new(nameof(OrcamentoGeradoMessage)),
-        ["Destino"] = new("OficinaEventos"),
-        ["Payload"] = new(JsonSerializer.Serialize(evento, JsonOptions)),
-        ["CriadoEm"] = new(evento.OcorridoEm.ToString("O", CultureInfo.InvariantCulture)),
-        ["Tentativas"] = new() { N = "0" }
-    };
-
-    private static Dictionary<string, AttributeValue> MapearOutbox(
-        Guid messageId,
-        Guid correlationId,
-        string tipo,
-        string payload,
-        DateTimeOffset criadoEm) => new()
-        {
-            ["PK"] = new($"OUTBOX#{messageId}"),
-            ["SK"] = new("MESSAGE"),
-            ["EntityType"] = new("Outbox"),
-            ["MessageId"] = new(messageId.ToString()),
-            ["CorrelationId"] = new(correlationId.ToString()),
-            ["Tipo"] = new(tipo),
-            ["Destino"] = new("OficinaEventos"),
-            ["Payload"] = new(payload),
-            ["CriadoEm"] = new(criadoEm.ToString("O", CultureInfo.InvariantCulture)),
-            ["Tentativas"] = new() { N = "0" }
-        };
 
     private static Orcamento Restaurar(IReadOnlyDictionary<string, AttributeValue> item) =>
         Orcamento.Restaurar(

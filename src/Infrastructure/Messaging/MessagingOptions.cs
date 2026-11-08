@@ -8,5 +8,6 @@ public sealed class MessagingOptions
     public string Region { get; init; } = "us-east-1";
     public string? ServiceUrl { get; init; }
     public string GerarOrcamentoQueueUrl { get; init; } = string.Empty;
+    public string SolicitarPagamentoQueueUrl { get; init; } = string.Empty;
     public string EventosTopicArn { get; init; } = string.Empty;
 }
