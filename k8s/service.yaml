@@ -1,6 +1,12 @@
-# ClusterIP: os outros servicos chegam pelo DNS do cluster
-# (oficina-mecanica-billing.oficina-mecanica.svc.cluster.local). A exposicao externa pelo
-# API Gateway e definida na F4-14.
+# NodePort 30081, como o OS Service (30080): o ALB interno do infra-k8s usa
+# alvos do tipo instancia e entrega o trafego nesta porta de cada node
+# (infra/alb-servicos.tf, F4-14). A porta precisa casar com a de la -
+# divergir derruba o health check e o ALB devolve 502 so para este servico.
+#
+# Continua alcancavel pelo DNS do cluster
+# (oficina-mecanica-billing.oficina-mecanica.svc.cluster.local), que e o caminho
+# das chamadas internas entre servicos. Nunca LoadBalancer: o Kubernetes
+# criaria um ELB fora do Terraform, que ninguem destroi e que segue cobrando.
 apiVersion: v1
 kind: Service
 metadata:
@@ -9,9 +15,10 @@ metadata:
     app: oficina-mecanica-billing
     app.kubernetes.io/part-of: oficina-mecanica
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: oficina-mecanica-billing
   ports:
     - port: 80
       targetPort: 8080
+      nodePort: 30081
