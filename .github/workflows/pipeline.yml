@@ -30,4 +30,15 @@ jobs:
       imagem: billing
       regiao_aws: ${{ vars.AWS_REGION || 'us-east-1' }}
       ambiente: ${{ github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.event_name == 'push' && (github.ref_name == 'main' && 'producao' || 'homologacao')) || '' }}
+      # Enderecos de mensageria (F4-11), montados no oficina-mecanica-billing-secret
+      # a cada deploy a partir do Secrets Manager, como no OS Service. As
+      # chaves sao as do segredo criado pelo Terraform deste repositorio
+      # (infra/messaging.tf); o codigo passa a le-las no ajuste combinado em
+      # 08/11 (uma fila de comandos, roteada pelo campo type). Ate la, as
+      # chaves chegam ao pod sem efeito e Messaging__Enabled segue false.
+      # DynamoDB/RDS entram quando a F4-13/F4-12 existirem.
+      segredos: |
+        Messaging__EventTopicArn=tc-grupo160/{sufixo}/billing/messaging#Messaging__EventTopicArn
+        Messaging__CommandsQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__CommandsQueueUrl
+        Messaging__OsEventsQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__OsEventsQueueUrl
     secrets: inherit
