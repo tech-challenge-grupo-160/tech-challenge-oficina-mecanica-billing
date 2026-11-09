@@ -25,6 +25,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: oficina-mecanica-billing-config
+            # Montado pela pipeline a partir do Secrets Manager (input segredos);
+            # nunca versionado. Sem ele o pod nao sobe, o que e o desejado.
+            - secretRef:
+                name: oficina-mecanica-billing-secret
           env:
             - name: DD_SERVICE
               value: oficina-mecanica-billing
