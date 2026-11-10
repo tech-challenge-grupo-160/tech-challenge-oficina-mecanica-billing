@@ -56,10 +56,13 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+          # Request de memoria igual ao do OS Service (256Mi). Com 128Mi o HPA via
+          # 81% de uso medio so com o runtime do .NET subido, acima do alvo de 75%,
+          # e escalava sem carga (ensaio de 09/11 no dev, F4-38). Limit segue 512Mi.
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
             limits:
               cpu: 500m
               memory: 512Mi
