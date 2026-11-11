@@ -27,7 +27,7 @@ public sealed class PagamentoHandlersTests
         var command = new SolicitarPagamentoCommand(
             Guid.NewGuid(), orcamento.CorrelationId, orcamento.Id, 3007, DateTimeOffset.UtcNow);
 
-        var result = await new SolicitarPagamentoCommandHandler(orcamentos.Object, pagamentos.Object)
+        var result = await new SolicitarPagamentoCommandHandler(orcamentos.Object, pagamentos.Object, Desabilitado())
             .Handle(command, CancellationToken.None);
 
         result.Status.Should().Be("Pendente");
@@ -45,7 +45,7 @@ public sealed class PagamentoHandlersTests
             .ReturnsAsync(orcamento);
 
         var action = () => new SolicitarPagamentoCommandHandler(
-                orcamentos.Object, Mock.Of<IPagamentoRepository>())
+                orcamentos.Object, Mock.Of<IPagamentoRepository>(), Desabilitado())
             .Handle(new SolicitarPagamentoCommand(
                 Guid.NewGuid(), orcamento.CorrelationId, orcamento.Id, 3007, DateTimeOffset.UtcNow),
                 CancellationToken.None);
@@ -100,6 +100,91 @@ public sealed class PagamentoHandlersTests
         new ObterPagamentoPorOrdemQueryValidator().Validate(
             new ObterPagamentoPorOrdemQuery(0)).IsValid.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Solicitar_DeveCriarCobrancaNoMercadoPagoQuandoHabilitado()
+    {
+        var orcamento = CriarOrcamentoAprovado();
+        var orcamentos = new Mock<IOrcamentoRepository>();
+        orcamentos.Setup(repository => repository.ObterPorOrdemServicoIdAsync(
+                3007, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orcamento);
+        var pagamentos = new Mock<IPagamentoRepository>();
+        pagamentos.Setup(repository => repository.CriarOuObterAsync(
+                It.IsAny<Pagamento>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Pagamento candidato, Guid _, CancellationToken _) => (candidato, true));
+        pagamentos.Setup(repository => repository.RegistrarCobrancaAsync(
+                It.IsAny<Pagamento>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Pagamento pagamento, CancellationToken _) => pagamento);
+        var gateway = new Mock<IMercadoPagoGateway>();
+        gateway.SetupGet(item => item.Habilitado).Returns(true);
+        gateway.Setup(item => item.CriarCobrancaAsync(It.IsAny<Pagamento>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CobrancaMercadoPago("pref-1", "https://mp.test/checkout/pref-1"));
+
+        var result = await new SolicitarPagamentoCommandHandler(orcamentos.Object, pagamentos.Object, gateway.Object)
+            .Handle(new SolicitarPagamentoCommand(
+                Guid.NewGuid(), orcamento.CorrelationId, orcamento.Id, 3007, DateTimeOffset.UtcNow),
+                CancellationToken.None);
+
+        result.LinkPagamento.Should().Be("https://mp.test/checkout/pref-1");
+        pagamentos.Verify(repository => repository.RegistrarCobrancaAsync(
+            It.Is<Pagamento>(pagamento => pagamento.CobrancaId == "pref-1"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Solicitar_NaoDeveCriarSegundaCobrancaNoReprocessamento()
+    {
+        var orcamento = CriarOrcamentoAprovado();
+        var existente = Pagamento.Criar(
+            orcamento.CorrelationId, orcamento.Id, 3007, orcamento.ValorTotal, DateTimeOffset.UtcNow);
+        existente.RegistrarCobranca("pref-1", "https://mp.test/checkout/pref-1");
+        var orcamentos = new Mock<IOrcamentoRepository>();
+        orcamentos.Setup(repository => repository.ObterPorOrdemServicoIdAsync(
+                3007, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orcamento);
+        var pagamentos = new Mock<IPagamentoRepository>();
+        pagamentos.Setup(repository => repository.CriarOuObterAsync(
+                It.IsAny<Pagamento>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((existente, false));
+        var gateway = new Mock<IMercadoPagoGateway>();
+        gateway.SetupGet(item => item.Habilitado).Returns(true);
+
+        var result = await new SolicitarPagamentoCommandHandler(orcamentos.Object, pagamentos.Object, gateway.Object)
+            .Handle(new SolicitarPagamentoCommand(
+                Guid.NewGuid(), orcamento.CorrelationId, orcamento.Id, 3007, DateTimeOffset.UtcNow),
+                CancellationToken.None);
+
+        result.LinkPagamento.Should().Be("https://mp.test/checkout/pref-1");
+        gateway.Verify(item => item.CriarCobrancaAsync(
+            It.IsAny<Pagamento>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Solicitar_NaoDeveChamarMercadoPagoQuandoDesabilitado()
+    {
+        var orcamento = CriarOrcamentoAprovado();
+        var orcamentos = new Mock<IOrcamentoRepository>();
+        orcamentos.Setup(repository => repository.ObterPorOrdemServicoIdAsync(
+                3007, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orcamento);
+        var pagamentos = new Mock<IPagamentoRepository>();
+        pagamentos.Setup(repository => repository.CriarOuObterAsync(
+                It.IsAny<Pagamento>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Pagamento candidato, Guid _, CancellationToken _) => (candidato, true));
+
+        var result = await new SolicitarPagamentoCommandHandler(orcamentos.Object, pagamentos.Object, Desabilitado())
+            .Handle(new SolicitarPagamentoCommand(
+                Guid.NewGuid(), orcamento.CorrelationId, orcamento.Id, 3007, DateTimeOffset.UtcNow),
+                CancellationToken.None);
+
+        result.LinkPagamento.Should().BeNull();
+        pagamentos.Verify(repository => repository.RegistrarCobrancaAsync(
+            It.IsAny<Pagamento>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    private static IMercadoPagoGateway Desabilitado() =>
+        Mock.Of<IMercadoPagoGateway>(gateway => gateway.Habilitado == false);
 
     private static Orcamento CriarOrcamentoAprovado()
     {

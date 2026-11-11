@@ -102,9 +102,78 @@ public sealed class DynamoDbPagamentoRepository(
         return response.IsItemSet ? Restaurar(response.Item) : null;
     }
 
-    public async Task<(Pagamento Pagamento, bool Alterado)> ConfirmarAsync(
+    public async Task<Pagamento> RegistrarCobrancaAsync(
+        Pagamento pagamento,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dynamoDb.UpdateItemAsync(new UpdateItemRequest
+            {
+                TableName = options.Value.TableName,
+                Key = ObterChave(pagamento.OrdemServicoId, pagamento.Id),
+                UpdateExpression = "SET CobrancaId = :cobrancaId, LinkPagamento = :link",
+                ConditionExpression = "#status = :pendente AND attribute_not_exists(CobrancaId)",
+                ExpressionAttributeNames = new Dictionary<string, string>
+                {
+                    ["#status"] = "Status"
+                },
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    [":cobrancaId"] = new(pagamento.CobrancaId),
+                    [":link"] = new(pagamento.LinkPagamento),
+                    [":pendente"] = new(Pagamento.StatusPendente)
+                }
+            }, cancellationToken);
+            return pagamento;
+        }
+        catch (ConditionalCheckFailedException)
+        {
+            // Outra execucao gravou a cobranca (ou o pagamento ja teve desfecho):
+            // vale o que esta persistido.
+            return await ObterAsync(pagamento.OrdemServicoId, pagamento.Id, cancellationToken)
+                ?? throw new InvalidOperationException("Pagamento removido durante o registro da cobranca.");
+        }
+    }
+
+    public Task<(Pagamento Pagamento, bool Alterado)> ConfirmarAsync(
         Pagamento pagamento,
         PagamentoConfirmadoMessage evento,
+        CancellationToken cancellationToken) =>
+        RegistrarDesfechoAsync(
+            pagamento,
+            evento.MessageId,
+            evento.CorrelationId,
+            nameof(PagamentoConfirmadoMessage),
+            JsonSerializer.Serialize(evento, JsonOptions),
+            evento.OcorridoEm,
+            cancellationToken);
+
+    public Task<(Pagamento Pagamento, bool Alterado)> RecusarAsync(
+        Pagamento pagamento,
+        PagamentoRecusadoMessage evento,
+        CancellationToken cancellationToken) =>
+        RegistrarDesfechoAsync(
+            pagamento,
+            evento.MessageId,
+            evento.CorrelationId,
+            nameof(PagamentoRecusadoMessage),
+            JsonSerializer.Serialize(evento, JsonOptions),
+            evento.OcorridoEm,
+            cancellationToken);
+
+    /// <summary>
+    /// Grava o desfecho do pagamento e o evento na Outbox na mesma transacao. A
+    /// condicao em Pendente garante que notificacoes concorrentes ou repetidas
+    /// publiquem o evento uma unica vez.
+    /// </summary>
+    private async Task<(Pagamento Pagamento, bool Alterado)> RegistrarDesfechoAsync(
+        Pagamento pagamento,
+        Guid eventoId,
+        Guid correlationId,
+        string tipoEvento,
+        string payload,
+        DateTimeOffset ocorridoEm,
         CancellationToken cancellationToken)
     {
         var request = new TransactWriteItemsRequest
@@ -124,7 +193,7 @@ public sealed class DynamoDbPagamentoRepository(
                         },
                         ExpressionAttributeValues = new Dictionary<string, AttributeValue>
                         {
-                            [":pendente"] = new("Pendente"),
+                            [":pendente"] = new(Pagamento.StatusPendente),
                             [":id"] = new(pagamento.Id.ToString())
                         }
                     }
@@ -135,11 +204,11 @@ public sealed class DynamoDbPagamentoRepository(
                     {
                         TableName = options.Value.TableName,
                         Item = DynamoDbMessageItemFactory.CriarOutbox(
-                            evento.MessageId,
-                            evento.CorrelationId,
-                            nameof(PagamentoConfirmadoMessage),
-                            JsonSerializer.Serialize(evento, JsonOptions),
-                            evento.OcorridoEm),
+                            eventoId,
+                            correlationId,
+                            tipoEvento,
+                            payload,
+                            ocorridoEm),
                         ConditionExpression = "attribute_not_exists(PK)"
                     }
                 }
@@ -157,10 +226,11 @@ public sealed class DynamoDbPagamentoRepository(
                 pagamento.OrdemServicoId,
                 pagamento.Id,
                 cancellationToken);
-            if (existente?.Status == "Confirmado")
+            if (existente?.Status == pagamento.Status)
                 return (existente, false);
 
-            throw new InvalidOperationException("Pagamento foi alterado durante a confirmacao.");
+            throw new InvalidOperationException(
+                $"Pagamento foi alterado durante o registro do status {pagamento.Status}.");
         }
     }
 
@@ -181,8 +251,31 @@ public sealed class DynamoDbPagamentoRepository(
         };
         if (pagamento.ConfirmadoEm.HasValue)
             item["ConfirmadoEm"] = new(pagamento.ConfirmadoEm.Value.ToString("O", CultureInfo.InvariantCulture));
+        if (pagamento.RecusadoEm.HasValue)
+            item["RecusadoEm"] = new(pagamento.RecusadoEm.Value.ToString("O", CultureInfo.InvariantCulture));
+        AdicionarSePreenchido(item, "MotivoRecusa", pagamento.MotivoRecusa);
+        AdicionarSePreenchido(item, "CobrancaId", pagamento.CobrancaId);
+        AdicionarSePreenchido(item, "LinkPagamento", pagamento.LinkPagamento);
+        AdicionarSePreenchido(item, "MercadoPagoPagamentoId", pagamento.MercadoPagoPagamentoId);
         return item;
     }
+
+    private static void AdicionarSePreenchido(
+        Dictionary<string, AttributeValue> item,
+        string nome,
+        string? valor)
+    {
+        if (!string.IsNullOrWhiteSpace(valor))
+            item[nome] = new(valor);
+    }
+
+    private static string? LerTexto(IReadOnlyDictionary<string, AttributeValue> item, string nome) =>
+        item.TryGetValue(nome, out var valor) ? valor.S : null;
+
+    private static DateTimeOffset? LerData(IReadOnlyDictionary<string, AttributeValue> item, string nome) =>
+        item.TryGetValue(nome, out var valor)
+            ? DateTimeOffset.Parse(valor.S, CultureInfo.InvariantCulture)
+            : null;
 
     private static string ObterPk(int ordemServicoId) => $"PAGAMENTO#OS#{ordemServicoId}";
 
@@ -201,7 +294,10 @@ public sealed class DynamoDbPagamentoRepository(
             decimal.Parse(item["Valor"].N, CultureInfo.InvariantCulture),
             item["Status"].S,
             DateTimeOffset.Parse(item["CriadoEm"].S, CultureInfo.InvariantCulture),
-            item.TryGetValue("ConfirmadoEm", out var confirmadoEm)
-                ? DateTimeOffset.Parse(confirmadoEm.S, CultureInfo.InvariantCulture)
-                : null);
+            LerData(item, "ConfirmadoEm"),
+            LerData(item, "RecusadoEm"),
+            LerTexto(item, "MotivoRecusa"),
+            LerTexto(item, "CobrancaId"),
+            LerTexto(item, "LinkPagamento"),
+            LerTexto(item, "MercadoPagoPagamentoId"));
 }

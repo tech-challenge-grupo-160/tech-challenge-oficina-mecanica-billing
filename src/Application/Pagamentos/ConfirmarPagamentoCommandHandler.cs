@@ -1,10 +1,14 @@
 using Fiap.TechChallenge.OficinaMecanica.Billing.Application.Abstractions;
 using Fiap.TechChallenge.OficinaMecanica.Billing.Application.Exceptions;
-using Fiap.TechChallenge.OficinaMecanica.Billing.Application.Messaging;
 using MediatR;
 
 namespace Fiap.TechChallenge.OficinaMecanica.Billing.Application.Pagamentos;
 
+/// <summary>
+/// Confirmacao simulada (Development/Testing). Fora desses ambientes a
+/// confirmacao vem do webhook do Mercado Pago, em
+/// <see cref="ProcessarNotificacaoMercadoPagoCommandHandler"/>.
+/// </summary>
 public sealed class ConfirmarPagamentoCommandHandler(IPagamentoRepository pagamentos)
     : IRequestHandler<ConfirmarPagamentoCommand, PagamentoResult>
 {
@@ -21,19 +25,9 @@ public sealed class ConfirmarPagamentoCommandHandler(IPagamentoRepository pagame
         if (!pagamento.Confirmar(DateTimeOffset.UtcNow))
             return PagamentoResult.Criar(pagamento);
 
-        var evento = new PagamentoConfirmadoMessage(
-            Guid.NewGuid(),
-            pagamento.CorrelationId,
-            pagamento.ConfirmadoEm!.Value,
-            pagamento.Id,
-            pagamento.OrcamentoId,
-            pagamento.OrdemServicoId,
-            pagamento.Valor,
-            pagamento.Status,
-            pagamento.ConfirmadoEm.Value);
         var resultado = await pagamentos.ConfirmarAsync(
             pagamento,
-            evento,
+            PagamentoEventos.Confirmado(pagamento),
             cancellationToken);
 
         return PagamentoResult.Criar(resultado.Pagamento);

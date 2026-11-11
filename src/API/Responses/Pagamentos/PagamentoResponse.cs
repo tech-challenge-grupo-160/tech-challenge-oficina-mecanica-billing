@@ -10,7 +10,10 @@ public sealed record PagamentoResponse(
     decimal Valor,
     string Status,
     DateTimeOffset CriadoEm,
-    DateTimeOffset? ConfirmadoEm)
+    DateTimeOffset? ConfirmadoEm,
+    DateTimeOffset? RecusadoEm,
+    string? MotivoRecusa,
+    string? LinkPagamento)
 {
     public static PagamentoResponse From(PagamentoResult result) => new(
         result.Id,
@@ -20,5 +23,8 @@ public sealed record PagamentoResponse(
         result.Valor,
         result.Status,
         result.CriadoEm,
-        result.ConfirmadoEm);
+        result.ConfirmadoEm,
+        result.RecusadoEm,
+        result.MotivoRecusa,
+        result.LinkPagamento);
 }

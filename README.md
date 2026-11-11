@@ -15,7 +15,58 @@ O Billing já executa o primeiro fluxo assíncrono de orçamento:
 5. publica `OrcamentoGeradoMessage` no tópico SNS `oficina-eventos`;
 6. disponibiliza a consulta do orçamento por ordem de serviço.
 
-Aprovação/recusa, criação da cobrança e integração com Mercado Pago ficam nos próximos cortes.
+Depois da aprovação, a cobrança é feita no Mercado Pago (seção abaixo).
+
+## Pagamento no Mercado Pago (F4-20)
+
+O pagamento usa o **Checkout Pro**, em ambiente de teste.
+
+1. Ao consumir `SolicitarPagamentoMessage`, o Billing grava o `Pagamento` e cria
+   uma preferência no Mercado Pago com o valor do orçamento aprovado e
+   `external_reference = os:<ordemServicoId>;pagamento:<pagamentoId>`. O link
+   (`init_point`) fica em `linkPagamento` no
+   `GET /api/v1/pagamentos/ordem-servico/{ordemServicoId}`.
+2. O Mercado Pago avisa em `POST /api/v1/pagamentos/webhook` (tópico `payment`).
+   O Billing valida o `x-signature` com a assinatura secreta do webhook
+   (HMAC-SHA256 sobre `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`) e
+   responde `401` se ela não bater.
+3. O status **nunca** vem do corpo da notificação: o Billing consulta
+   `GET /v1/payments/{id}` na API, localiza o pagamento pela referência externa e
+   confere o valor.
+4. `approved` grava `Confirmado` e publica `PagamentoConfirmadoMessage`;
+   `rejected`/`cancelled` grava `Recusado` e publica `PagamentoRecusadoMessage`.
+   Status intermediários (`pending`, `in_process`...) não mudam nada: o Mercado
+   Pago avisa de novo quando o status mudar.
+5. Notificações repetidas são idempotentes: o pagamento só sai de `Pendente` uma
+   vez (escrita condicional no DynamoDB, junto com a Outbox), então o evento é
+   publicado uma única vez e o webhook responde `200` com desfecho `Duplicada`.
+
+### Credenciais
+
+As credenciais ficam no AWS Secrets Manager, em `tc-grupo160/<ambiente>/mercadopago`
+(JSON com `access_token` e `webhook_secret`), e nunca no repositório. No cluster o
+pod recebe só o nome do segredo (`MercadoPago__SecretId`) e lê o valor no startup.
+Sem o segredo preenchido o pod não sobe.
+
+| Configuração | Uso |
+|---|---|
+| `MercadoPago__Enabled` | liga a integração (desligada, o pagamento segue pelo fluxo simulado) |
+| `MercadoPago__SecretId` | nome do segredo no Secrets Manager (cluster) |
+| `MercadoPago__AccessToken` / `MercadoPago__WebhookSecret` | só execução local, por `dotnet user-secrets` ou variável de ambiente |
+| `MercadoPago__NotificationUrl` | opcional; vazio usa a URL configurada no painel do Mercado Pago |
+
+Trocar o segredo exige reiniciar os pods:
+`kubectl rollout restart deployment/oficina-mecanica-billing -n oficina-mecanica`.
+
+A rota do webhook é pública no API Gateway (`POST /api/v1/pagamentos/webhook`, sem
+JWT, criada na F4-14 no `tech-challenge-infra-k8s`), porque o Mercado Pago não manda
+token do sistema. A regra do ALB para `/api/v1/pagamentos*` entrega a chamada ao
+Billing. A proteção é a validação do `x-signature`. No painel do Mercado Pago, a
+URL de notificação é `<gateway_url>/api/v1/pagamentos/webhook`.
+
+Um pagamento recusado é final: uma aprovação que chegue depois da recusa é
+ignorada e registrada em log, porque a saga já compensou a OS. O estorno (F4-21)
+está fora do escopo (ADR-0004).
 
 ## Contratos
 

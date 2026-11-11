@@ -48,6 +48,14 @@ public sealed class PagamentosControllerTests : IClassFixture<CustomWebApplicati
     }
 
     [Fact]
+    public async Task WebhookMercadoPago_DeveRetornarNotFoundComIntegracaoDesligada()
+    {
+        var response = await _client.PostAsync("/api/v1/pagamentos/webhook?data.id=123&type=payment", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Get_DeveRetornarNotFoundQuandoPagamentoNaoExistir()
     {
         _factory.Pagamentos.Pagamento = null;

@@ -45,6 +45,87 @@ public sealed class PagamentoTests
         action.Should().Throw<ArgumentException>();
     }
 
+    [Fact]
+    public void RegistrarCobranca_DeveGuardarLinkUmaUnicaVez()
+    {
+        var pagamento = CriarPagamento();
+
+        pagamento.RegistrarCobranca("pref-1", "https://mp.test/1").Should().BeTrue();
+        pagamento.RegistrarCobranca("pref-2", "https://mp.test/2").Should().BeFalse();
+
+        pagamento.PossuiCobranca.Should().BeTrue();
+        pagamento.CobrancaId.Should().Be("pref-1");
+        pagamento.LinkPagamento.Should().Be("https://mp.test/1");
+    }
+
+    [Theory]
+    [InlineData("", "https://mp.test/1")]
+    [InlineData("pref-1", " ")]
+    public void RegistrarCobranca_DeveExigirIdELink(string cobrancaId, string link)
+    {
+        var action = () => CriarPagamento().RegistrarCobranca(cobrancaId, link);
+
+        action.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void RegistrarCobranca_DeveFalharForaDePendente()
+    {
+        var pagamento = CriarPagamento();
+        pagamento.Confirmar(DateTimeOffset.UtcNow);
+
+        var action = () => pagamento.RegistrarCobranca("pref-1", "https://mp.test/1");
+
+        action.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Confirmar_DeveGuardarIdDoMercadoPago()
+    {
+        var pagamento = CriarPagamento();
+
+        pagamento.Confirmar(DateTimeOffset.UtcNow, "123");
+
+        pagamento.MercadoPagoPagamentoId.Should().Be("123");
+    }
+
+    [Fact]
+    public void Recusar_DeveSerIdempotenteEGuardarMotivo()
+    {
+        var pagamento = CriarPagamento();
+        var recusadoEm = DateTimeOffset.UtcNow;
+
+        pagamento.Recusar(recusadoEm, "rejected: cc_rejected_other_reason", "123").Should().BeTrue();
+        pagamento.Recusar(recusadoEm.AddSeconds(1), "outro").Should().BeFalse();
+
+        pagamento.Status.Should().Be(Pagamento.StatusRecusado);
+        pagamento.RecusadoEm.Should().Be(recusadoEm);
+        pagamento.MotivoRecusa.Should().Be("rejected: cc_rejected_other_reason");
+        pagamento.MercadoPagoPagamentoId.Should().Be("123");
+    }
+
+    [Fact]
+    public void Recusar_DeveExigirMotivo()
+    {
+        var action = () => CriarPagamento().Recusar(DateTimeOffset.UtcNow, " ");
+
+        action.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void DesfechosOpostos_DevemSerRejeitados()
+    {
+        var confirmado = CriarPagamento();
+        confirmado.Confirmar(DateTimeOffset.UtcNow);
+        var recusado = CriarPagamento();
+        recusado.Recusar(DateTimeOffset.UtcNow, "rejected");
+
+        ((Action)(() => confirmado.Recusar(DateTimeOffset.UtcNow, "rejected")))
+            .Should().Throw<InvalidOperationException>();
+        ((Action)(() => recusado.Confirmar(DateTimeOffset.UtcNow)))
+            .Should().Throw<InvalidOperationException>();
+    }
+
     private static Pagamento CriarPagamento() => Pagamento.Criar(
         Guid.NewGuid(), Guid.NewGuid(), 3007, 219.90m, DateTimeOffset.UtcNow);
 }
