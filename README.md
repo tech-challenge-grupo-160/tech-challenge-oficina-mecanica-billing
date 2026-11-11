@@ -133,6 +133,13 @@ dotnet test Fiap.TechChallenge.OficinaMecanica.Billing.slnx \
 
 Os testes cobrem domínio, validações, handlers, idempotência e transação no DynamoDB, contratos de mensagens e endpoint HTTP. A meta do Quality Gate é cobertura mínima de 80% em código novo.
 
+## Mercado Pago
+
+O pagamento usa o **Checkout Pro**. As credenciais (access token e assinatura do
+webhook) ficam no AWS Secrets Manager, em `tc-grupo160/<ambiente>/mercadopago`,
+e nunca no repositório. Produto escolhido, contas de teste e o passo a passo para
+gerar as credenciais estão em [docs/MERCADO-PAGO.md](docs/MERCADO-PAGO.md).
+
 ## Repositórios relacionados
 
 | Serviço | Repositório |
