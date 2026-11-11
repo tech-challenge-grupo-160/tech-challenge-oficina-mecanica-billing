@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Amazon.SQS;
 using Amazon.SQS.Model;
+using Fiap.TechChallenge.OficinaMecanica.Billing.Shared.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -58,9 +59,12 @@ public abstract class SqsCommandConsumerWorker<TMessage>(
             var comando = JsonSerializer.Deserialize<TMessage>(message.Body, JsonOptions)
                 ?? throw new InvalidOperationException($"Comando {typeof(TMessage).Name} invalido.");
 
+            // correlationId e numero da OS em todos os logs do processamento.
+            using var contexto = logger.IniciarParaMensagem(comando, typeof(TMessage).Name);
             await using var scope = scopeFactory.CreateAsyncScope();
             await ProcessarComandoAsync(comando, scope.ServiceProvider, cancellationToken);
             await sqs.DeleteMessageAsync(QueueUrl, message.ReceiptHandle, cancellationToken);
+            logger.LogInformation("Comando {TipoMensagem} processado.", typeof(TMessage).Name);
         }
         catch (Exception exception)
         {

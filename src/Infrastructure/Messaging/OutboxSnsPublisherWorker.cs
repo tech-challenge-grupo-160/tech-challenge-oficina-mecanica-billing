@@ -3,7 +3,9 @@ using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
+using Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure.Logging;
 using Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure.Persistence;
+using Fiap.TechChallenge.OficinaMecanica.Billing.Shared.Logging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -77,6 +79,12 @@ public sealed class OutboxSnsPublisherWorker(
         Dictionary<string, AttributeValue> item,
         CancellationToken cancellationToken)
     {
+        using var contexto = logger.Iniciar(
+            LerGuid(item, "CorrelationId"),
+            OutboxLogContexto.LerOrdemServicoId(item["Payload"].S),
+            LerGuid(item, "MessageId"),
+            item["Tipo"].S);
+
         try
         {
             await sns.PublishAsync(new PublishRequest
@@ -103,6 +111,7 @@ public sealed class OutboxSnsPublisherWorker(
                     [":agora"] = new(DateTimeOffset.UtcNow.ToString("O"))
                 }
             }, cancellationToken);
+            logger.LogInformation("Evento {TipoMensagem} publicado.", item["Tipo"].S);
         }
         catch (Exception exception)
         {
@@ -124,4 +133,7 @@ public sealed class OutboxSnsPublisherWorker(
             logger.LogWarning(exception, "Falha ao publicar evento {MessageId}.", item["MessageId"].S);
         }
     }
+
+    private static Guid? LerGuid(Dictionary<string, AttributeValue> item, string nome) =>
+        item.TryGetValue(nome, out var valor) && Guid.TryParse(valor.S, out var guid) ? guid : null;
 }
