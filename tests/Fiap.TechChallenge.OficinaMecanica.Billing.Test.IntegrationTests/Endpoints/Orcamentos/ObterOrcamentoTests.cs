@@ -55,6 +55,37 @@ public class ObterOrcamentoTests : IClassFixture<CustomWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task PatchAprovar_DeveAtualizarOrcamentoPeloLinkPublico()
+    {
+        _factory.Repository.Orcamento = CriarOrcamento();
+        var orcamento = _factory.Repository.Orcamento;
+
+        var response = await _client.PatchAsync(
+            $"/api/v1/orcamentos/3007/{orcamento!.Id}/aprovar", null);
+        var body = await response.Content.ReadFromJsonAsync<OrcamentoResponse>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body!.Status.Should().Be("Aprovado");
+        body.RespondidoEm.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task PatchRecusar_DeveExigirMotivoEAtualizarOrcamento()
+    {
+        _factory.Repository.Orcamento = CriarOrcamento();
+        var orcamento = _factory.Repository.Orcamento;
+
+        var response = await _client.PatchAsJsonAsync(
+            $"/api/v1/orcamentos/3007/{orcamento!.Id}/recusar",
+            new { motivo = "Valor nao aprovado." });
+        var body = await response.Content.ReadFromJsonAsync<OrcamentoResponse>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body!.Status.Should().Be("Recusado");
+        body.MotivoRecusa.Should().Be("Valor nao aprovado.");
+    }
+
     private static Orcamento CriarOrcamento() => Orcamento.Gerar(
         Guid.NewGuid(), 3007, 1, "Pastilhas desgastadas.",
         [new ItemServicoOrcamento(1000, "Alinhamento", 150m, 30)],

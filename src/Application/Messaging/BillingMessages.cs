@@ -36,3 +36,45 @@ public sealed record OrcamentoGeradoMessage(
     decimal ValorPecas,
     decimal ValorTotal,
     int Versao = 1);
+
+public sealed record OrcamentoAprovadoMessage(
+    Guid MessageId,
+    Guid CorrelationId,
+    DateTimeOffset OcorridoEm,
+    Guid OrcamentoId,
+    int OrdemServicoId,
+    int DiagnosticoId,
+    string Status,
+    decimal ValorTotal,
+    int Versao = 1);
+
+public sealed record OrcamentoRecusadoMessage(
+    Guid MessageId,
+    Guid CorrelationId,
+    DateTimeOffset OcorridoEm,
+    Guid OrcamentoId,
+    int OrdemServicoId,
+    int DiagnosticoId,
+    string Status,
+    string Motivo,
+    int Versao = 1);
+
+public sealed record SolicitarPagamentoMessage(
+    Guid MessageId,
+    Guid CorrelationId,
+    DateTimeOffset OcorridoEm,
+    Guid OrcamentoId,
+    int OrdemServicoId,
+    int Versao = 1);
+
+public sealed record PagamentoConfirmadoMessage(
+    Guid MessageId,
+    Guid CorrelationId,
+    DateTimeOffset OcorridoEm,
+    Guid PagamentoId,
+    Guid OrcamentoId,
+    int OrdemServicoId,
+    decimal Valor,
+    string Status,
+    DateTimeOffset ConfirmadoEm,
+    int Versao = 1);

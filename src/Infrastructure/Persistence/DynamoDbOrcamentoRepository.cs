@@ -39,7 +39,10 @@ public sealed class DynamoDbOrcamentoRepository(
                     Put = new Put
                     {
                         TableName = options.Value.TableName,
-                        Item = MapearInbox(mensagemEntradaId, candidato.CorrelationId),
+                        Item = DynamoDbMessageItemFactory.CriarInbox(
+                            mensagemEntradaId,
+                            candidato.CorrelationId,
+                            nameof(GerarOrcamentoMessage)),
                         ConditionExpression = "attribute_not_exists(PK)"
                     }
                 },
@@ -48,7 +51,12 @@ public sealed class DynamoDbOrcamentoRepository(
                     Put = new Put
                     {
                         TableName = options.Value.TableName,
-                        Item = MapearOutbox(eventoSaida),
+                        Item = DynamoDbMessageItemFactory.CriarOutbox(
+                            eventoSaida.MessageId,
+                            eventoSaida.CorrelationId,
+                            nameof(OrcamentoGeradoMessage),
+                            JsonSerializer.Serialize(eventoSaida, JsonOptions),
+                            eventoSaida.OcorridoEm),
                         ConditionExpression = "attribute_not_exists(PK)"
                     }
                 }
@@ -93,51 +101,99 @@ public sealed class DynamoDbOrcamentoRepository(
         return response.IsItemSet ? Restaurar(response.Item) : null;
     }
 
-    internal static Dictionary<string, AttributeValue> MapearOrcamento(Orcamento orcamento) => new()
+    public async Task<(Orcamento Orcamento, bool Alterado)> RegistrarDecisaoAsync(
+        Orcamento orcamento,
+        Guid eventoId,
+        string tipoEvento,
+        string payloadEvento,
+        CancellationToken cancellationToken)
     {
-        ["PK"] = new($"ORCAMENTO#{orcamento.OrdemServicoId}"),
-        ["SK"] = new("ORCAMENTO"),
-        ["EntityType"] = new("Orcamento"),
-        ["Id"] = new(orcamento.Id.ToString()),
-        ["CorrelationId"] = new(orcamento.CorrelationId.ToString()),
-        ["OrdemServicoId"] = new() { N = orcamento.OrdemServicoId.ToString(CultureInfo.InvariantCulture) },
-        ["DiagnosticoId"] = new() { N = orcamento.DiagnosticoId.ToString(CultureInfo.InvariantCulture) },
-        ["ParecerTecnico"] = new(orcamento.ParecerTecnico),
-        ["Status"] = new(orcamento.Status),
-        ["CriadoEm"] = new(orcamento.CriadoEm.ToString("O", CultureInfo.InvariantCulture)),
-        ["ValorServicos"] = new() { N = orcamento.ValorServicos.ToString(CultureInfo.InvariantCulture) },
-        ["ValorPecas"] = new() { N = orcamento.ValorPecas.ToString(CultureInfo.InvariantCulture) },
-        ["ValorTotal"] = new() { N = orcamento.ValorTotal.ToString(CultureInfo.InvariantCulture) },
-        ["Servicos"] = new(JsonSerializer.Serialize(orcamento.Servicos, JsonOptions)),
-        ["Pecas"] = new(JsonSerializer.Serialize(orcamento.Pecas, JsonOptions))
-    };
-
-    private static Dictionary<string, AttributeValue> MapearInbox(
-        Guid messageId,
-        Guid correlationId) => new()
+        var request = new TransactWriteItemsRequest
         {
-            ["PK"] = new($"INBOX#{messageId}"),
-            ["SK"] = new("MESSAGE"),
-            ["EntityType"] = new("Inbox"),
-            ["MessageId"] = new(messageId.ToString()),
-            ["CorrelationId"] = new(correlationId.ToString()),
-            ["Tipo"] = new(nameof(GerarOrcamentoMessage)),
-            ["ProcessadoEm"] = new(DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture))
+            TransactItems =
+            [
+                new TransactWriteItem
+                {
+                    Put = new Put
+                    {
+                        TableName = options.Value.TableName,
+                        Item = MapearOrcamento(orcamento),
+                        ConditionExpression = "#status = :gerado AND Id = :id",
+                        ExpressionAttributeNames = new Dictionary<string, string>
+                        {
+                            ["#status"] = "Status"
+                        },
+                        ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                        {
+                            [":gerado"] = new("Gerado"),
+                            [":id"] = new(orcamento.Id.ToString())
+                        }
+                    }
+                },
+                new TransactWriteItem
+                {
+                    Put = new Put
+                    {
+                        TableName = options.Value.TableName,
+                        Item = DynamoDbMessageItemFactory.CriarOutbox(
+                            eventoId,
+                            orcamento.CorrelationId,
+                            tipoEvento,
+                            payloadEvento,
+                            orcamento.RespondidoEm ?? DateTimeOffset.UtcNow),
+                        ConditionExpression = "attribute_not_exists(PK)"
+                    }
+                }
+            ]
         };
 
-    private static Dictionary<string, AttributeValue> MapearOutbox(OrcamentoGeradoMessage evento) => new()
+        try
+        {
+            await dynamoDb.TransactWriteItemsAsync(request, cancellationToken);
+            return (orcamento, true);
+        }
+        catch (TransactionCanceledException)
+        {
+            var existente = await ObterPorOrdemServicoIdAsync(
+                orcamento.OrdemServicoId,
+                cancellationToken);
+            if (existente is not null &&
+                existente.Id == orcamento.Id &&
+                string.Equals(existente.Status, orcamento.Status, StringComparison.Ordinal))
+                return (existente, false);
+
+            throw new InvalidOperationException(
+                "O orcamento ja recebeu uma decisao diferente ou foi alterado.");
+        }
+    }
+
+    internal static Dictionary<string, AttributeValue> MapearOrcamento(Orcamento orcamento)
     {
-        ["PK"] = new($"OUTBOX#{evento.MessageId}"),
-        ["SK"] = new("MESSAGE"),
-        ["EntityType"] = new("Outbox"),
-        ["MessageId"] = new(evento.MessageId.ToString()),
-        ["CorrelationId"] = new(evento.CorrelationId.ToString()),
-        ["Tipo"] = new(nameof(OrcamentoGeradoMessage)),
-        ["Destino"] = new("OficinaEventos"),
-        ["Payload"] = new(JsonSerializer.Serialize(evento, JsonOptions)),
-        ["CriadoEm"] = new(evento.OcorridoEm.ToString("O", CultureInfo.InvariantCulture)),
-        ["Tentativas"] = new() { N = "0" }
-    };
+        var item = new Dictionary<string, AttributeValue>
+        {
+            ["PK"] = new($"ORCAMENTO#{orcamento.OrdemServicoId}"),
+            ["SK"] = new("ORCAMENTO"),
+            ["EntityType"] = new("Orcamento"),
+            ["Id"] = new(orcamento.Id.ToString()),
+            ["CorrelationId"] = new(orcamento.CorrelationId.ToString()),
+            ["OrdemServicoId"] = new() { N = orcamento.OrdemServicoId.ToString(CultureInfo.InvariantCulture) },
+            ["DiagnosticoId"] = new() { N = orcamento.DiagnosticoId.ToString(CultureInfo.InvariantCulture) },
+            ["ParecerTecnico"] = new(orcamento.ParecerTecnico),
+            ["Status"] = new(orcamento.Status),
+            ["CriadoEm"] = new(orcamento.CriadoEm.ToString("O", CultureInfo.InvariantCulture)),
+            ["ValorServicos"] = new() { N = orcamento.ValorServicos.ToString(CultureInfo.InvariantCulture) },
+            ["ValorPecas"] = new() { N = orcamento.ValorPecas.ToString(CultureInfo.InvariantCulture) },
+            ["ValorTotal"] = new() { N = orcamento.ValorTotal.ToString(CultureInfo.InvariantCulture) },
+            ["Servicos"] = new(JsonSerializer.Serialize(orcamento.Servicos, JsonOptions)),
+            ["Pecas"] = new(JsonSerializer.Serialize(orcamento.Pecas, JsonOptions))
+        };
+        if (orcamento.RespondidoEm.HasValue)
+            item["RespondidoEm"] = new(orcamento.RespondidoEm.Value.ToString("O", CultureInfo.InvariantCulture));
+        if (!string.IsNullOrWhiteSpace(orcamento.MotivoRecusa))
+            item["MotivoRecusa"] = new(orcamento.MotivoRecusa);
+
+        return item;
+    }
 
     private static Orcamento Restaurar(IReadOnlyDictionary<string, AttributeValue> item) =>
         Orcamento.Restaurar(
@@ -149,5 +205,9 @@ public sealed class DynamoDbOrcamentoRepository(
             item["Status"].S,
             DateTimeOffset.Parse(item["CriadoEm"].S, CultureInfo.InvariantCulture),
             JsonSerializer.Deserialize<ItemServicoOrcamento[]>(item["Servicos"].S, JsonOptions) ?? [],
-            JsonSerializer.Deserialize<ItemPecaOrcamento[]>(item["Pecas"].S, JsonOptions) ?? []);
+            JsonSerializer.Deserialize<ItemPecaOrcamento[]>(item["Pecas"].S, JsonOptions) ?? [],
+            item.TryGetValue("RespondidoEm", out var respondidoEm)
+                ? DateTimeOffset.Parse(respondidoEm.S, CultureInfo.InvariantCulture)
+                : null,
+            item.TryGetValue("MotivoRecusa", out var motivoRecusa) ? motivoRecusa.S : null);
 }

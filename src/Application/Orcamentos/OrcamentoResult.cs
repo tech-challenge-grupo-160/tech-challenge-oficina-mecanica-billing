@@ -15,6 +15,8 @@ public sealed record OrcamentoResult(
     decimal ValorPecas,
     decimal ValorTotal,
     DateTimeOffset CriadoEm,
+    DateTimeOffset? RespondidoEm,
+    string? MotivoRecusa,
     bool Criado)
 {
     public static OrcamentoResult Criar(Orcamento orcamento, bool criado = false) => new(
@@ -30,5 +32,7 @@ public sealed record OrcamentoResult(
         orcamento.ValorPecas,
         orcamento.ValorTotal,
         orcamento.CriadoEm,
+        orcamento.RespondidoEm,
+        orcamento.MotivoRecusa,
         criado);
 }
