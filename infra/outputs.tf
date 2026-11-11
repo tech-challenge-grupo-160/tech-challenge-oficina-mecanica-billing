@@ -32,3 +32,13 @@ output "messaging_config_secret_arn" {
   description = "ARN do segredo de configuracao de mensageria."
   value       = aws_secretsmanager_secret.messaging_config.arn
 }
+
+output "dynamodb_table_name" {
+  description = "Nome da tabela unica do Billing (F4-13). O pod recebe pelo configmap."
+  value       = aws_dynamodb_table.billing.name
+}
+
+output "dynamodb_table_arn" {
+  description = "ARN da tabela unica do Billing."
+  value       = aws_dynamodb_table.billing.arn
+}

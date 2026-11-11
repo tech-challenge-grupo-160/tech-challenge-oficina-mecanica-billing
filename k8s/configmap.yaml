@@ -8,3 +8,8 @@ metadata:
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:8080"
+  # Tabela unica do Billing (F4-13), criada em infra/dynamodb.tf. O nome leva o
+  # ambiente porque dev, hom e prod dividem a conta; __AMBIENTE__ e trocado no
+  # deploy (pipeline e sobe-tudo.sh). Sem isto o pod usaria o padrao
+  # oficina-billing, que so existe no LocalStack.
+  DynamoDb__TableName: "tc-grupo160-__AMBIENTE__-billing"

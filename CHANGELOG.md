@@ -12,6 +12,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ### Added
 - Cobranca no Mercado Pago (Checkout Pro) com referencia a OS e webhook `POST /api/v1/pagamentos/webhook`: valida o `x-signature`, consulta o pagamento na API antes de decidir, publica `PagamentoConfirmadoMessage` ou `PagamentoRecusadoMessage` pela Outbox e trata notificacoes repetidas de forma idempotente. Credenciais lidas do Secrets Manager no startup (F4-20)
+- Tabela unica do Billing no DynamoDB (`tc-grupo160-<ambiente>-billing`), sob demanda, com chave `PK`/`SK`, indice `GSI1`, TTL em `ExpiraEmTtl` e point-in-time recovery so em producao; nome entregue ao pod pelo configmap (F4-13)
 - Documentacao do Mercado Pago: Checkout Pro como produto de pagamento, contas de teste, segredo por ambiente no Secrets Manager e passo a passo para gerar as credenciais (F4-06)
 - Logs estruturados para seguir uma OS entre os servicos (F4-32): todo log JSON sai com `correlationId`, `ordemServicoId`, `trace_id`/`span_id` e bloco `dd` (`dd.trace_id`, `dd.span_id`) para o Datadog ligar log e trace; escopo aberto nas requisicoes HTTP, nos consumidores SQS e na Outbox; `DD_LOGS_INJECTION=true` na imagem; campos `level` e `message` reconhecidos pelo Datadog; mascara de CNPJ alem do CPF
 - Pod com `tags.datadoghq.com/service` e `tags.datadoghq.com/env` e anotacao de logs `source: csharp`, para logs e traces do servico se ligarem no Datadog (F4-32)
