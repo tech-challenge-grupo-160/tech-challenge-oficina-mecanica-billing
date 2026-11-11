@@ -220,17 +220,31 @@ O `gh` pede o valor de forma interativa.
 
 ### 6. Aplicar
 
-- **Pela pipeline (recomendado):** *Actions → Terraform CI → Run workflow* no
-  `tech-challenge-infra-k8s`, com o ambiente desejado. O push em `develop`,
-  `homolog` e `main` também aplica o ambiente da branch.
-- **Local:** exporte as variáveis antes do apply, senão o Terraform remove o
-  valor gravado pela pipeline:
+O segredo é gravado pelo apply do `tech-challenge-infra-k8s`, que aplica o
+ambiente **inteiro** (rede, EKS, gateway). Por isso não existe um apply "só do
+Mercado Pago":
+
+- **Subindo o ambiente (o caso normal):** exporte as duas variáveis e rode o
+  `sobe-tudo.sh`. Ele grava o segredo na etapa 3 e, no fim, imprime a URL do
+  webhook para o passo 4. Passo a passo em
+  [Credenciais do Mercado Pago](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/CICLO-DE-VIDA.md#credenciais-do-mercado-pago).
 
   ```bash
   read -rsp 'Access token: ' TF_VAR_mercadopago_access_token && echo && export TF_VAR_mercadopago_access_token
   read -rsp 'Webhook secret: ' TF_VAR_mercadopago_webhook_secret && echo && export TF_VAR_mercadopago_webhook_secret
-  terraform -chdir=infra apply -var-file=inventories/dev/terraform.tfvars
+  bash ../tech-challenge-oficina-mecanica/scripts/sobe-tudo.sh --ambiente dev
   ```
+
+- **Pelas pipelines:** basta os secrets do passo 5 estarem cadastrados. O push
+  em `develop`, `homolog` e `main` do `infra-k8s` aplica o ambiente da branch com
+  eles.
+
+> **Não use o *Terraform CI → Run workflow* do `infra-k8s` só para gravar as
+> credenciais** com o ambiente derrubado. Ele sobe o EKS inteiro, falha no meio
+> porque as Lambdas não existem e deixa recurso cobrando.
+>
+> Num apply local do `infra-k8s` sem as duas variáveis exportadas, o Terraform
+> **apaga** o valor que já estava no segredo.
 
 ### 7. Conferir sem expor o valor
 
