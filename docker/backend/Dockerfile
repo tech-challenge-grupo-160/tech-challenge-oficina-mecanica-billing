@@ -61,6 +61,8 @@ ENV DD_TRACE_ENABLED=true
 ENV DD_SERVICE=oficina-mecanica-billing
 ENV DD_ENV=Development
 ENV DD_VERSION=unknown
+# Coloca dd.trace_id e dd.span_id nos logs, ligando cada log ao trace (F4-32).
+ENV DD_LOGS_INJECTION=true
 
 COPY --from=datadog-tracer /opt/datadog /opt/datadog
 COPY --from=datadog-tracer /var/log/datadog/dotnet /var/log/datadog/dotnet
