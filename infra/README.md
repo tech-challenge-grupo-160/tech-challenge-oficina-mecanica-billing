@@ -17,6 +17,30 @@ Ao migrar o deploy para o workflow compartilhado, injete os campos
 `Messaging__CommandsQueueUrl` pelo parâmetro `segredos` do workflow, usando como
 origem `tc-grupo160/{sufixo}/billing/messaging#<campo>`.
 
+## Tabela DynamoDB (F4-13)
+
+O mesmo state cria a tabela única do Billing, `tc-grupo160-<ambiente>-billing`
+([`dynamodb.tf`](dynamodb.tf)), pelo modelo da
+[ADR-0006](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/adrs/0006-banco-por-servico.md):
+
+| Item | Valor |
+|---|---|
+| Chave | `PK` (partição) e `SK` (ordenação), texto, a mesma que o código usa |
+| Cobrança | sob demanda: nada com o ambiente parado |
+| Índice | `GSI1` por `GSI1PK`, esparso: pagamento pelo id do Mercado Pago. Hoje nenhum item grava `GSI1PK` |
+| TTL | atributo `ExpiraEmTtl`, epoch em segundos, para deduplicação de webhook e inbox |
+| Point-in-time recovery | só em `prod` |
+| Proteção contra exclusão | desligada, para o `derruba-tudo.sh` conseguir apagar |
+
+O pod recebe o nome pelo `k8s/configmap.yaml` (`DynamoDb__TableName`, com
+`__AMBIENTE__` trocado no deploy) e acessa a tabela pela `LabRole` dos nodes
+(F4-05). Localmente, o `DynamoDbTableInitializer` cria a mesma chave no
+LocalStack.
+
+Por estar neste diretório, a tabela sobe e desce junto com a mensageria: etapa
+5 do `sobe-tudo.sh`, passo 2 do `derruba-tudo.sh` e o workflow
+`terraform-messaging.yml`. **O destroy apaga os dados**, sem backup fora de `prod`.
+
 ## Aplicacao
 
 ```powershell
