@@ -125,8 +125,9 @@ O limite é de 15 contas de teste por aplicação.
 
 1. Na aplicação, abra **Webhooks → Configurar notificações**.
 2. Em **URL modo teste**, informe a URL pública do Billing no ambiente
-   (gateway do ambiente + rota do webhook definida na F4-20). Se a rota ainda não
-   existir, use uma URL provisória e atualize depois. A assinatura não muda.
+   (`<gateway_url>/api/v1/pagamentos/webhook`, ver "URL definitiva" abaixo). Se o
+   Billing ainda não estiver no ar, use uma URL provisória e atualize depois. A
+   assinatura não muda.
 3. Em **Eventos recomendados para integrações com Checkout Pro**, marque só
    **Pagamentos (legacy)** (tópico `payment`). Em **Outros eventos**, deixe tudo
    desmarcado: `Order (Mercado Pago)` é da Orders API e `Planos e assinaturas` é
@@ -142,7 +143,7 @@ reenvia.
 
 #### URL provisória para testar
 
-Enquanto a rota do Billing não existe, use o https://webhook.site:
+Enquanto o Billing não estiver no ar no ambiente, use o https://webhook.site:
 
 - no painel, cole a **"Your unique URL"**: `https://webhook.site/<id>`;
 - **não** use o endereço da barra do navegador (`https://webhook.site/#!/view/<id>`).
@@ -158,33 +159,31 @@ A URL do webhook.site é pública para quem tiver o link: não compartilhe.
 A URL definitiva é o Billing exposto pelo API Gateway do ambiente:
 
 ```text
-<gateway_url>/api/v1/webhooks/mercadopago
+<gateway_url>/api/v1/pagamentos/webhook
 ```
 
 - `<gateway_url>` é o output `gateway_url` do Terraform do `tech-challenge-infra-k8s`
   (`https://<id>.execute-api.us-east-1.amazonaws.com/<ambiente>`);
-- `/api/v1/webhooks/mercadopago` é a rota sugerida para a F4-20. Se o nome mudar,
-  atualize aqui.
+- `/api/v1/pagamentos/webhook` é a rota do Billing (F4-20).
 
-Pré-requisitos para trocar a URL provisória pela definitiva:
+Como a notificação chega ao Billing:
 
-1. **F4-14:** o gateway precisa encaminhar o tráfego para o Billing. Hoje as
-   rotas `/api/v1/...` vão só para o OS Service.
-2. **Rota pública no gateway:** `ANY /api/v1/{proxy+}` usa o authorizer de JWT, e
-   o Mercado Pago não manda token do nosso sistema. Sem uma rota própria, a
-   notificação seria recusada com `401` antes de chegar no Billing. A rota segue o
-   padrão do `POST /api/v1/auth/login` em `infra/api-gateway.tf`:
+1. **Rota pública no gateway (F4-14):** `ANY /api/v1/{proxy+}` usa o authorizer
+   de JWT, e o Mercado Pago não manda token do nosso sistema. Por isso existe uma
+   rota própria sem JWT em `infra/api-gateway.tf`:
 
    ```hcl
-   route_key          = "POST /api/v1/webhooks/mercadopago"
+   route_key          = "POST /api/v1/pagamentos/webhook"
    authorization_type = "NONE"
    ```
 
    A rota fica aberta, mas não fica insegura: a proteção é o Billing validar o
    `x-signature` com a assinatura secreta e descartar o que não vier do Mercado
    Pago.
-3. **F4-20:** o Billing implementa a rota, valida a assinatura e consulta o
-   pagamento pelo `data.id` antes de marcar o orçamento como pago.
+2. **ALB (F4-14):** a regra de `/api/v1/pagamentos*` em `infra/alb-servicos.tf`
+   entrega a chamada ao Billing.
+3. **Billing (F4-20):** valida a assinatura e consulta o pagamento pelo `data.id`
+   na API do Mercado Pago antes de marcar o pagamento como confirmado ou recusado.
 
 #### Cuidados no AWS Academy
 
