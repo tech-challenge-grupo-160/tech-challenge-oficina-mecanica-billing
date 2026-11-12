@@ -7,7 +7,8 @@ namespace Fiap.TechChallenge.OficinaMecanica.Billing.Application.Pagamentos;
 
 public sealed class SolicitarPagamentoCommandHandler(
     IOrcamentoRepository orcamentos,
-    IPagamentoRepository pagamentos)
+    IPagamentoRepository pagamentos,
+    IMercadoPagoGateway mercadoPago)
     : IRequestHandler<SolicitarPagamentoCommand, PagamentoResult>
 {
     public async Task<PagamentoResult> Handle(
@@ -31,11 +32,22 @@ public sealed class SolicitarPagamentoCommandHandler(
             request.OrdemServicoId,
             orcamento.ValorTotal,
             request.SolicitadoEm);
-        var resultado = await pagamentos.CriarOuObterAsync(
+        var (pagamento, _) = await pagamentos.CriarOuObterAsync(
             candidato,
             request.MensagemEntradaId,
             cancellationToken);
 
-        return PagamentoResult.Criar(resultado.Pagamento);
+        // Tambem cobre o reprocessamento: se a mensagem voltou porque a chamada
+        // ao Mercado Pago falhou, o pagamento ja existe e so falta a cobranca.
+        if (mercadoPago.Habilitado &&
+            pagamento.Status == Pagamento.StatusPendente &&
+            !pagamento.PossuiCobranca)
+        {
+            var cobranca = await mercadoPago.CriarCobrancaAsync(pagamento, cancellationToken);
+            pagamento.RegistrarCobranca(cobranca.Id, cobranca.LinkPagamento);
+            pagamento = await pagamentos.RegistrarCobrancaAsync(pagamento, cancellationToken);
+        }
+
+        return PagamentoResult.Criar(pagamento);
     }
 }

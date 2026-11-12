@@ -17,6 +17,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.107.3" />
     <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.0.100.16" />
+    <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.11" />
     <PackageReference Include="AWSSDK.SQS" Version="4.0.100.16" />
   </ItemGroup>
 

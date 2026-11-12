@@ -19,8 +19,21 @@ public interface IPagamentoRepository
         Guid pagamentoId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Grava a cobranca do Mercado Pago no pagamento. Se outra execucao ja
+    /// gravou uma cobranca, devolve o pagamento persistido sem alterar.
+    /// </summary>
+    Task<Pagamento> RegistrarCobrancaAsync(
+        Pagamento pagamento,
+        CancellationToken cancellationToken);
+
     Task<(Pagamento Pagamento, bool Alterado)> ConfirmarAsync(
         Pagamento pagamento,
         PagamentoConfirmadoMessage evento,
+        CancellationToken cancellationToken);
+
+    Task<(Pagamento Pagamento, bool Alterado)> RecusarAsync(
+        Pagamento pagamento,
+        PagamentoRecusadoMessage evento,
         CancellationToken cancellationToken);
 }

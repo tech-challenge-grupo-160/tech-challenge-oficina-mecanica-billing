@@ -78,3 +78,16 @@ public sealed record PagamentoConfirmadoMessage(
     string Status,
     DateTimeOffset ConfirmadoEm,
     int Versao = 1);
+
+public sealed record PagamentoRecusadoMessage(
+    Guid MessageId,
+    Guid CorrelationId,
+    DateTimeOffset OcorridoEm,
+    Guid PagamentoId,
+    Guid OrcamentoId,
+    int OrdemServicoId,
+    decimal Valor,
+    string Status,
+    string Motivo,
+    DateTimeOffset RecusadoEm,
+    int Versao = 1);

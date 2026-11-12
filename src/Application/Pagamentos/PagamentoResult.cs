@@ -10,7 +10,10 @@ public sealed record PagamentoResult(
     decimal Valor,
     string Status,
     DateTimeOffset CriadoEm,
-    DateTimeOffset? ConfirmadoEm)
+    DateTimeOffset? ConfirmadoEm,
+    DateTimeOffset? RecusadoEm = null,
+    string? MotivoRecusa = null,
+    string? LinkPagamento = null)
 {
     public static PagamentoResult Criar(Pagamento pagamento) => new(
         pagamento.Id,
@@ -20,5 +23,8 @@ public sealed record PagamentoResult(
         pagamento.Valor,
         pagamento.Status,
         pagamento.CriadoEm,
-        pagamento.ConfirmadoEm);
+        pagamento.ConfirmadoEm,
+        pagamento.RecusadoEm,
+        pagamento.MotivoRecusa,
+        pagamento.LinkPagamento);
 }

@@ -53,12 +53,33 @@ public sealed class InMemoryPagamentoRepository : IPagamentoRepository
             Pagamento.OrdemServicoId == ordemServicoId &&
             Pagamento.Id == pagamentoId ? Pagamento : null);
 
+    public List<object> Eventos { get; } = [];
+
+    public Task<Pagamento> RegistrarCobrancaAsync(
+        Pagamento pagamento,
+        CancellationToken cancellationToken)
+    {
+        Pagamento = pagamento;
+        return Task.FromResult(pagamento);
+    }
+
     public Task<(Pagamento Pagamento, bool Alterado)> ConfirmarAsync(
         Pagamento pagamento,
         PagamentoConfirmadoMessage evento,
         CancellationToken cancellationToken)
     {
         Pagamento = pagamento;
+        Eventos.Add(evento);
+        return Task.FromResult((pagamento, true));
+    }
+
+    public Task<(Pagamento Pagamento, bool Alterado)> RecusarAsync(
+        Pagamento pagamento,
+        PagamentoRecusadoMessage evento,
+        CancellationToken cancellationToken)
+    {
+        Pagamento = pagamento;
+        Eventos.Add(evento);
         return Task.FromResult((pagamento, true));
     }
 }
