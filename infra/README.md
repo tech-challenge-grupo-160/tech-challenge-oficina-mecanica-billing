@@ -1,21 +1,31 @@
 # Mensageria do Billing
 
-Este diretorio provisiona o topico SNS publicado pelo Billing, a fila de
-eventos do OS Service, a fila direta de comandos, suas DLQs e a configuracao no
-AWS Secrets Manager.
+Este diretorio provisiona o topico SNS publicado pelo Billing, uma fila SQS por
+comando que ele consome, uma DLQ por fila e a configuracao no AWS Secrets
+Manager. E a mesma topologia do LocalStack (`docker/localstack/init-aws.sh` do
+OS Service), descrita no adendo de 11/11 a ADR-0005: uma fila por tipo de
+mensagem, sem roteamento pelo campo `type`.
 
-O topico `tc-grupo160-<ambiente>-billing-events` usa a chave gerenciada pela
-AWS para SNS. Filas e DLQs usam criptografia gerenciada pelo SQS, retencao de 4
-e 14 dias e redrive apos 5 recebimentos. A assinatura filtra os eventos
-`os.aberta` e `os.cancelada` pelo campo `type` do envelope.
+| Fila | Comando | Chave que o codigo le |
+|---|---|---|
+| `...-billing-gerar-orcamento` | `GerarOrcamentoMessage` | `GerarOrcamentoQueueUrl` |
+| `...-billing-solicitar-pagamento` | `SolicitarPagamentoMessage` | `SolicitarPagamentoQueueUrl` |
 
-O segredo `tc-grupo160/<ambiente>/billing/messaging` contem os nomes, URLs e
-ARNs do topico e das filas. O catalogo esta em
+Os comandos chegam por envio direto do OS Service (`SendMessage`), sem topico
+nem assinatura. O topico `tc-grupo160-<ambiente>-billing-events` recebe os eventos
+(`OrcamentoGerado`, `OrcamentoAprovado`, `OrcamentoRecusado`,
+`PagamentoConfirmado`, `PagamentoRecusado`); o publicador da Outbox grava o tipo no atributo `tipo`
+e quem filtra sao as filas do OS Service.
+
+O topico usa a chave gerenciada pela AWS para SNS. Filas e DLQs usam
+criptografia gerenciada pelo SQS, retencao de 4 e 14 dias e redrive apos 5
+recebimentos.
+
+O segredo `tc-grupo160/<ambiente>/billing/messaging` tem exatamente as chaves
+`Messaging__*` que o codigo le, inclusive `Messaging__Enabled`. O workflow de
+deploy as injeta pelo parametro `segredos` e o `sobe-tudo.sh` copia todas para
+o Secret do pod. O catalogo esta em
 [docs/mensageria/catalogo.md](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/mensageria/catalogo.md).
-Ao migrar o deploy para o workflow compartilhado, injete os campos
-`Messaging__EventTopicArn`, `Messaging__OsEventsQueueUrl` e
-`Messaging__CommandsQueueUrl` pelo parâmetro `segredos` do workflow, usando como
-origem `tc-grupo160/{sufixo}/billing/messaging#<campo>`.
 
 ## Tabela DynamoDB (F4-13)
 

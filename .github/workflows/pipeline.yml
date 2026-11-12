@@ -33,12 +33,13 @@ jobs:
       # Enderecos de mensageria (F4-11), montados no oficina-mecanica-billing-secret
       # a cada deploy a partir do Secrets Manager, como no OS Service. As
       # chaves sao as do segredo criado pelo Terraform deste repositorio
-      # (infra/messaging.tf); o codigo passa a le-las no ajuste combinado em
-      # 08/11 (uma fila de comandos, roteada pelo campo type). Ate la, as
-      # chaves chegam ao pod sem efeito e Messaging__Enabled segue false.
-      # DynamoDB/RDS entram quando a F4-13/F4-12 existirem.
+      # (infra/messaging.tf), com os nomes que o codigo le: uma fila por tipo de
+      # mensagem, como no LocalStack (adendo de 11/11 a ADR-0005).
+      # Messaging__Enabled vem do mesmo segredo e liga os workers.
+      # O nome da tabela DynamoDB (F4-13) vem do configmap, nao daqui.
       segredos: |
-        Messaging__EventTopicArn=tc-grupo160/{sufixo}/billing/messaging#Messaging__EventTopicArn
-        Messaging__CommandsQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__CommandsQueueUrl
-        Messaging__OsEventsQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__OsEventsQueueUrl
+        Messaging__Enabled=tc-grupo160/{sufixo}/billing/messaging#Messaging__Enabled
+        Messaging__EventosTopicArn=tc-grupo160/{sufixo}/billing/messaging#Messaging__EventosTopicArn
+        Messaging__GerarOrcamentoQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__GerarOrcamentoQueueUrl
+        Messaging__SolicitarPagamentoQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__SolicitarPagamentoQueueUrl
     secrets: inherit
