@@ -1,11 +1,9 @@
 using Fiap.TechChallenge.OficinaMecanica.Billing.API.Requests.Webhooks;
 using Fiap.TechChallenge.OficinaMecanica.Billing.Application.Abstractions;
 using Fiap.TechChallenge.OficinaMecanica.Billing.Application.Pagamentos;
-using Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure.MercadoPago;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.Extensions.Options;
 
 namespace Fiap.TechChallenge.OficinaMecanica.Billing.API.Controllers;
 
@@ -19,7 +17,7 @@ namespace Fiap.TechChallenge.OficinaMecanica.Billing.API.Controllers;
 public sealed class WebhooksController(
     ISender sender,
     IMercadoPagoAssinaturaValidator assinatura,
-    IOptions<MercadoPagoOptions> options,
+    IMercadoPagoGateway mercadoPago,
     ILogger<WebhooksController> logger) : ControllerBase
 {
     private const string TopicoPagamento = "payment";
@@ -37,7 +35,9 @@ public sealed class WebhooksController(
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] MercadoPagoNotificacaoRequest? corpo,
         CancellationToken cancellationToken)
     {
-        if (!options.Value.Enabled)
+        // Desligado na configuracao ou sem credencial valida: sem assinatura para
+        // validar a notificacao, a rota se comporta como inexistente.
+        if (!mercadoPago.Habilitado)
             return NotFound();
 
         // O manifesto assinado usa o data.id da query string; o corpo so cobre

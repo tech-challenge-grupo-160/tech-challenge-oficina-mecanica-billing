@@ -49,15 +49,29 @@ public sealed class MercadoPagoWebhookTests : IClassFixture<MercadoPagoWebApplic
     }
 
     [Fact]
-    public async Task Post_DevePublicarRecusa()
+    public async Task Post_DevePublicarRecusaDefinitiva()
     {
-        _factory.Gateway.Responder("rejected", _pagamento);
+        _factory.Gateway.Responder("cancelled", _pagamento);
 
         var response = await Enviar("123");
 
         var body = await response.Content.ReadFromJsonAsync<NotificacaoMercadoPagoResponse>();
         body!.Desfecho.Should().Be(NotificacaoMercadoPagoResult.Recusado);
         _factory.Pagamentos.Eventos.Should().ContainSingle().Which.Should().BeOfType<PagamentoRecusadoMessage>();
+    }
+
+    [Fact]
+    public async Task Post_TentativaRecusadaNaoDevePublicarRecusa()
+    {
+        // Checkout Pro: depois de um rejected o comprador pode tentar de novo.
+        _factory.Gateway.Responder("rejected", _pagamento);
+
+        var response = await Enviar("123");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<NotificacaoMercadoPagoResponse>();
+        body!.Desfecho.Should().Be(NotificacaoMercadoPagoResult.Aguardando);
+        _factory.Pagamentos.Eventos.Should().BeEmpty();
     }
 
     [Fact]

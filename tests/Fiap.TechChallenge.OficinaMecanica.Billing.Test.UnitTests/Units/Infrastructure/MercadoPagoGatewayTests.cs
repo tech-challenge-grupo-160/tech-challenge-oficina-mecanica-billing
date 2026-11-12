@@ -122,6 +122,26 @@ public sealed class MercadoPagoGatewayTests
             .Should().ThrowAsync<InvalidOperationException>();
     }
 
+    [Fact]
+    public void GatewayLigadoSemCredencial_DeveSeComportarComoDesabilitado()
+    {
+        // Enabled = true, mas o segredo veio vazio: o Billing segue sem cobranca
+        // em vez de cair (o webhook usa o mesmo sinal para responder 404).
+        var options = Options.Create(new MercadoPagoOptions
+        {
+            Enabled = true,
+            SecretId = "tc-grupo160/dev/mercadopago"
+        });
+        var client = new HttpClient(_handler) { BaseAddress = new Uri("https://api.mp.test/") };
+
+        var gateway = new MercadoPagoGateway(
+            client,
+            new MercadoPagoCredenciaisProvider(options, _ => string.Empty),
+            options);
+
+        gateway.Habilitado.Should().BeFalse();
+    }
+
     private MercadoPagoGateway CriarGateway(string? notificationUrl)
     {
         var options = Options.Create(new MercadoPagoOptions

@@ -34,9 +34,12 @@ O pagamento usa o **Checkout Pro**, em ambiente de teste.
    `GET /v1/payments/{id}` na API, localiza o pagamento pela referência externa e
    confere o valor.
 4. `approved` grava `Confirmado` e publica `PagamentoConfirmadoMessage`;
-   `rejected`/`cancelled` grava `Recusado` e publica `PagamentoRecusadoMessage`.
-   Status intermediários (`pending`, `in_process`...) não mudam nada: o Mercado
-   Pago avisa de novo quando o status mudar.
+   `cancelled` (pagamento cancelado ou expirado) grava `Recusado` e publica
+   `PagamentoRecusadoMessage`. `rejected` é só uma **tentativa** recusada: no
+   Checkout Pro o comprador pode tentar de novo na mesma página, e cada tentativa
+   é um pagamento novo no Mercado Pago. O pagamento continua `Pendente` e o
+   desfecho é `Aguardando`. Status intermediários (`pending`, `in_process`...)
+   também não mudam nada: o Mercado Pago avisa de novo quando o status mudar.
 5. Notificações repetidas são idempotentes: o pagamento só sai de `Pendente` uma
    vez (escrita condicional no DynamoDB, junto com a Outbox), então o evento é
    publicado uma única vez e o webhook responde `200` com desfecho `Duplicada`.
@@ -46,7 +49,9 @@ O pagamento usa o **Checkout Pro**, em ambiente de teste.
 As credenciais ficam no AWS Secrets Manager, em `tc-grupo160/<ambiente>/mercadopago`
 (JSON com `access_token` e `webhook_secret`), e nunca no repositório. No cluster o
 pod recebe só o nome do segredo (`MercadoPago__SecretId`) e lê o valor no startup.
-Sem o segredo preenchido o pod não sobe.
+Sem o segredo preenchido o pod sobe mesmo assim, **sem cobrança**: os orçamentos
+funcionam, o webhook responde `404` e o log da subida diz o motivo. Preencha o
+segredo e reinicie os pods.
 
 | Configuração | Uso |
 |---|---|

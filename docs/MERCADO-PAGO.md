@@ -65,7 +65,8 @@ no GitHub (*Settings → Secrets and variables → Actions*):
 | `MERCADOPAGO_WEBHOOK_SECRET_DEV` / `_HOM` / `_PROD` | `webhook_secret` do segredo do ambiente |
 
 Sem os secrets, o segredo é criado **sem valor**. O plan e o apply continuam
-passando, e o Billing deve falhar no startup com uma mensagem clara.
+passando. O Billing sobe sem cobrança no Mercado Pago: os orçamentos funcionam, o
+webhook responde `404` e o log da subida avisa que falta a credencial.
 
 Todos os ambientes do lab usam **credenciais de teste**: nenhum pagamento real
 passa pelo projeto. Os ambientes podem compartilhar a mesma aplicação, mas cada

@@ -1,5 +1,6 @@
 using Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure.MercadoPago;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Fiap.TechChallenge.OficinaMecanica.Billing.Test.UnitTests.Units.Infrastructure;
@@ -93,15 +94,65 @@ public sealed class MercadoPagoCredenciaisTests
     }
 
     [Fact]
-    public async Task StartupCheck_DeveFalharQuandoHabilitadoSemCredenciais()
+    public void Provider_SemCredencialDeveFicarIndisponivelSemLancar()
     {
-        var options = Options.Create(new MercadoPagoOptions { Enabled = true });
+        var provider = new MercadoPagoCredenciaisProvider(
+            Options.Create(new MercadoPagoOptions { SecretId = "tc-grupo160/dev/mercadopago" }),
+            _ => string.Empty);
+
+        provider.Disponivel.Should().BeFalse();
+        provider.Falha.Should().Contain("tc-grupo160/dev/mercadopago");
+    }
+
+    [Fact]
+    public void Provider_SemCredencialObterDeveLancarComOMotivo()
+    {
+        var provider = new MercadoPagoCredenciaisProvider(
+            Options.Create(new MercadoPagoOptions { SecretId = "tc-grupo160/dev/mercadopago" }),
+            _ => throw new InvalidOperationException("Falha ao ler o segredo 'tc-grupo160/dev/mercadopago' no Secrets Manager."));
+
+        var action = () => provider.Obter();
+
+        action.Should().Throw<InvalidOperationException>().WithMessage("*tc-grupo160/dev/mercadopago*");
+    }
+
+    [Fact]
+    public void Provider_ComCredencialDeveFicarDisponivel()
+    {
+        var provider = new MercadoPagoCredenciaisProvider(
+            Options.Create(new MercadoPagoOptions { SecretId = "tc-grupo160/dev/mercadopago" }),
+            _ => SegredoValido);
+
+        provider.Disponivel.Should().BeTrue();
+        provider.Falha.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task StartupCheck_HabilitadoSemCredenciaisNaoDeveDerrubarOServico()
+    {
+        // Sem credencial o Billing sobe sem cobranca no Mercado Pago, em vez de
+        // derrubar o pod e levar os orcamentos junto.
+        var options = Options.Create(new MercadoPagoOptions { Enabled = true, SecretId = "tc-grupo160/dev/mercadopago" });
+        var logger = new LoggerFake();
         var check = new MercadoPagoCredenciaisStartupCheck(
-            new MercadoPagoCredenciaisProvider(options, _ => string.Empty), options);
+            new MercadoPagoCredenciaisProvider(options, _ => string.Empty), options, logger);
 
-        var action = () => check.StartAsync(CancellationToken.None);
+        await check.StartAsync(CancellationToken.None);
 
-        await action.Should().ThrowAsync<InvalidOperationException>();
+        logger.Avisos.Should().ContainSingle().Which.Should().Contain("tc-grupo160/dev/mercadopago");
+    }
+
+    [Fact]
+    public async Task StartupCheck_HabilitadoComCredenciaisNaoDeveAvisar()
+    {
+        var options = Options.Create(new MercadoPagoOptions { Enabled = true, SecretId = "tc-grupo160/dev/mercadopago" });
+        var logger = new LoggerFake();
+        var check = new MercadoPagoCredenciaisStartupCheck(
+            new MercadoPagoCredenciaisProvider(options, _ => SegredoValido), options, logger);
+
+        await check.StartAsync(CancellationToken.None);
+
+        logger.Avisos.Should().BeEmpty();
     }
 
     [Fact]
@@ -109,9 +160,31 @@ public sealed class MercadoPagoCredenciaisTests
     {
         var options = Options.Create(new MercadoPagoOptions { Enabled = false });
         var check = new MercadoPagoCredenciaisStartupCheck(
-            new MercadoPagoCredenciaisProvider(options, _ => throw new InvalidOperationException()), options);
+            new MercadoPagoCredenciaisProvider(options, _ => throw new InvalidOperationException()),
+            options,
+            new LoggerFake());
 
         await check.StartAsync(CancellationToken.None);
         await check.StopAsync(CancellationToken.None);
+    }
+
+    private sealed class LoggerFake : ILogger<MercadoPagoCredenciaisStartupCheck>
+    {
+        public List<string> Avisos { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                Avisos.Add(formatter(state, exception));
+        }
     }
 }

@@ -49,8 +49,8 @@ public sealed class ProcessarNotificacaoMercadoPagoTests
     }
 
     [Theory]
-    [InlineData("rejected", "cc_rejected_insufficient_amount", "rejected: cc_rejected_insufficient_amount")]
     [InlineData("cancelled", null, "cancelled")]
+    [InlineData("cancelled", "expired", "cancelled: expired")]
     public async Task Recusado_DeveRecusarEPublicarEvento(string status, string? detalhe, string motivo)
     {
         PagamentoRecusadoMessage? evento = null;
@@ -97,9 +97,41 @@ public sealed class ProcessarNotificacaoMercadoPagoTests
     }
 
     [Fact]
+    public async Task TentativaRecusada_DeveManterPendenteSemPublicarEvento()
+    {
+        // No Checkout Pro o comprador pode tentar de novo depois de um rejected.
+        ConsultaRetorna("rejected", detalhe: "cc_rejected_insufficient_amount");
+
+        var result = await Processar();
+
+        result.Desfecho.Should().Be(NotificacaoMercadoPagoResult.Aguardando);
+        result.PagamentoId.Should().Be(_pagamento.Id);
+        _pagamento.Status.Should().Be(Pagamento.StatusPendente);
+        _pagamentos.Verify(repository => repository.RecusarAsync(
+            It.IsAny<Pagamento>(), It.IsAny<PagamentoRecusadoMessage>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task AprovacaoDepoisDeTentativaRecusada_DeveConfirmar()
+    {
+        // Primeira tentativa recusada (pagamento MP 123), segunda aprovada
+        // (pagamento MP 124), na mesma preferencia: o cliente pagou e a OS segue.
+        ConsultaRetorna("rejected", detalhe: "cc_rejected_insufficient_amount");
+        await Processar();
+
+        ConsultaRetorna("approved", mercadoPagoId: "124");
+        var result = await Processar("124");
+
+        result.Desfecho.Should().Be(NotificacaoMercadoPagoResult.Confirmado);
+        _pagamento.Status.Should().Be(Pagamento.StatusConfirmado);
+        _pagamento.MercadoPagoPagamentoId.Should().Be("124");
+    }
+
+    [Fact]
     public async Task RecusaRepetida_DeveSerDuplicada()
     {
-        ConsultaRetorna("rejected");
+        ConsultaRetorna("cancelled");
 
         await Processar();
         var segunda = await Processar();
@@ -174,7 +206,7 @@ public sealed class ProcessarNotificacaoMercadoPagoTests
     [Fact]
     public async Task AprovacaoDepoisDaRecusa_DeveSerIgnorada()
     {
-        _pagamento.Recusar(DateTimeOffset.UtcNow, "rejected");
+        _pagamento.Recusar(DateTimeOffset.UtcNow, "cancelled");
         ConsultaRetorna("approved");
 
         var result = await Processar();
@@ -202,19 +234,23 @@ public sealed class ProcessarNotificacaoMercadoPagoTests
         new ProcessarNotificacaoMercadoPagoCommandValidator()
             .Validate(new ProcessarNotificacaoMercadoPagoCommand(id)).IsValid.Should().BeFalse();
 
-    private void ConsultaRetorna(string status, decimal valor = 219.90m, string? detalhe = null) =>
-        _gateway.Setup(item => item.ObterPagamentoAsync("123", It.IsAny<CancellationToken>()))
+    private void ConsultaRetorna(
+        string status,
+        decimal valor = 219.90m,
+        string? detalhe = null,
+        string mercadoPagoId = "123") =>
+        _gateway.Setup(item => item.ObterPagamentoAsync(mercadoPagoId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagamentoMercadoPago(
-                "123",
+                mercadoPagoId,
                 status,
                 detalhe,
                 ReferenciaExterna.Criar(_pagamento.OrdemServicoId, _pagamento.Id),
                 valor));
 
-    private Task<NotificacaoMercadoPagoResult> Processar() =>
+    private Task<NotificacaoMercadoPagoResult> Processar(string mercadoPagoId = "123") =>
         new ProcessarNotificacaoMercadoPagoCommandHandler(
                 _gateway.Object,
                 _pagamentos.Object,
                 NullLogger<ProcessarNotificacaoMercadoPagoCommandHandler>.Instance)
-            .Handle(new ProcessarNotificacaoMercadoPagoCommand("123"), CancellationToken.None);
+            .Handle(new ProcessarNotificacaoMercadoPagoCommand(mercadoPagoId), CancellationToken.None);
 }

@@ -17,7 +17,8 @@ public sealed record MercadoPagoCredenciais(string AccessToken, string WebhookSe
 /// 2. <c>MercadoPago:AccessToken</c> e <c>MercadoPago:WebhookSecret</c> - execucao
 ///    local, vindos de user-secrets ou variaveis de ambiente.
 ///
-/// Sem nenhuma das duas o startup falha. Nao existe valor padrao.
+/// Sem nenhuma das duas o resolver lanca e nao existe valor padrao. O
+/// MercadoPagoCredenciaisProvider trata a falha: o servico sobe sem cobranca.
 /// </summary>
 public static class MercadoPagoCredenciaisResolver
 {

@@ -48,7 +48,8 @@ spec:
                   fieldPath: status.hostIP
             # Mercado Pago (F4-20): o pod recebe so o nome do segredo e le
             # access token e assinatura do webhook no Secrets Manager no startup
-            # (LabRole). Sem o segredo preenchido o pod nao sobe.
+            # (LabRole). Sem o segredo preenchido o pod sobe sem cobranca no Mercado
+            # Pago: os orcamentos funcionam e o webhook responde 404.
             - name: MercadoPago__Enabled
               value: "true"
             - name: MercadoPago__SecretId

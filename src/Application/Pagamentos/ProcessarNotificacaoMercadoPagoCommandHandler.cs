@@ -19,8 +19,17 @@ public sealed class ProcessarNotificacaoMercadoPagoCommandHandler(
     ILogger<ProcessarNotificacaoMercadoPagoCommandHandler> logger)
     : IRequestHandler<ProcessarNotificacaoMercadoPagoCommand, NotificacaoMercadoPagoResult>
 {
+    // Recusa definitiva: o pagamento foi cancelado ou expirou e nao volta.
     private static readonly HashSet<string> StatusRecusa =
-        new(StringComparer.OrdinalIgnoreCase) { "rejected", "cancelled" };
+        new(StringComparer.OrdinalIgnoreCase) { "cancelled" };
+
+    // Tentativa recusada (cartao sem saldo, dados errados...). No Checkout Pro o
+    // comprador continua na mesma preferencia e pode tentar de novo; cada
+    // tentativa e um pagamento novo no Mercado Pago, com notificacao propria.
+    // Recusar aqui publicaria PagamentoRecusado (e a compensacao) e faria uma
+    // aprovacao seguinte ser ignorada, com o cliente pagando por uma OS ja
+    // compensada.
+    private const string StatusTentativaRecusada = "rejected";
 
     public async Task<NotificacaoMercadoPagoResult> Handle(
         ProcessarNotificacaoMercadoPagoCommand request,
@@ -50,6 +59,17 @@ public sealed class ProcessarNotificacaoMercadoPagoCommandHandler(
 
         if (StatusRecusa.Contains(pagamentoMp.Status))
             return await RecusarAsync(pagamento, pagamentoMp, cancellationToken);
+
+        if (string.Equals(pagamentoMp.Status, StatusTentativaRecusada, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogInformation(
+                "Tentativa de pagamento recusada no Mercado Pago ({StatusDetalhe}). Pagamento MP {MercadoPagoPagamentoId}; " +
+                "o pagamento {PagamentoId} segue pendente e o comprador pode tentar de novo.",
+                pagamentoMp.StatusDetalhe,
+                pagamentoMp.Id,
+                pagamento.Id);
+            return new NotificacaoMercadoPagoResult(NotificacaoMercadoPagoResult.Aguardando, pagamento.Id);
+        }
 
         // pending, in_process, authorized...: o Mercado Pago avisa de novo
         // quando o status mudar.

@@ -26,7 +26,9 @@ public sealed class MercadoPagoGateway(
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public bool Habilitado => true;
+    // Ligado na configuracao, mas sem credencial valida, se comporta como o
+    // gateway desligado: o pagamento nao gera cobranca e o webhook responde 404.
+    public bool Habilitado => credenciais.Disponivel;
 
     public async Task<CobrancaMercadoPago> CriarCobrancaAsync(
         Pagamento pagamento,
