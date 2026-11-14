@@ -8,6 +8,10 @@ services:
       target: runtime
     image: fiap-techchallenge-oficina-mecanica-billing:latest
     container_name: oficina-mecanica-billing-dev
+    # No Linux o Docker nao resolve host.docker.internal sozinho; o host-gateway
+    # faz o mesmo que o Docker Desktop faz no Windows e no Mac.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
