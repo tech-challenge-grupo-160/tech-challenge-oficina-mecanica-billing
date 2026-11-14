@@ -182,19 +182,20 @@ A infraestrutura de mensageria e os passos de provisionamento estão em
 
 ## Como rodar
 
-```bash
-docker compose up -d localstack
-```
+O Billing usa o LocalStack (SNS, SQS e DynamoDB) que sobe no compose do OS
+Service. Para o fluxo completo com os três serviços, siga o
+[guia de execução local](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/EXECUCAO-LOCAL.md).
 
-No Billing:
+Com o compose do OS Service já de pé, no Billing:
 
 ```bash
-export LOCALSTACK_ACCESS_KEY_ID=<credencial-local>
-export LOCALSTACK_SECRET_ACCESS_KEY=<credencial-local>
+cp .env.example .env
 docker compose up -d --build
 ```
 
 A API fica disponível em `http://localhost:8081` e o Swagger em `http://localhost:8081/swagger`.
+A tabela DynamoDB é criada no LocalStack na subida. Localmente o Mercado Pago fica
+desligado, e o pagamento é confirmado ou recusado pelos endpoints `simular-*`.
 
 ## Testes
 
