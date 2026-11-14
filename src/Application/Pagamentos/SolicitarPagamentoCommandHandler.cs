@@ -26,12 +26,27 @@ public sealed class SolicitarPagamentoCommandHandler(
         if (orcamento.Status != "Aprovado")
             throw new InvalidOperationException("Somente orcamento aprovado pode gerar pagamento.");
 
+        // Nova tentativa (F4-27): so depois que a anterior foi recusada. O
+        // pagamento e o passo repetivel da saga (ADR-0004): nunca existem duas
+        // cobrancas abertas para a mesma OS.
+        if (request.Tentativa > 1)
+        {
+            var anterior = await pagamentos.ObterAsync(
+                request.OrdemServicoId,
+                Pagamento.GerarId(request.CorrelationId, request.Tentativa - 1),
+                cancellationToken);
+            if (anterior?.Status != Pagamento.StatusRecusado)
+                throw new InvalidOperationException(
+                    $"Nova tentativa de cobranca ({request.Tentativa}) exige a tentativa anterior recusada.");
+        }
+
         var candidato = Pagamento.Criar(
             request.CorrelationId,
             request.OrcamentoId,
             request.OrdemServicoId,
             orcamento.ValorTotal,
-            request.SolicitadoEm);
+            request.SolicitadoEm,
+            request.Tentativa);
         var (pagamento, _) = await pagamentos.CriarOuObterAsync(
             candidato,
             request.MensagemEntradaId,

@@ -126,6 +126,32 @@ public sealed class PagamentoTests
             .Should().Throw<InvalidOperationException>();
     }
 
+    [Fact]
+    public void Criar_DeveGerarIdDeterministicoPorSagaETentativa()
+    {
+        var correlationId = Guid.NewGuid();
+
+        var primeira = Pagamento.Criar(correlationId, Guid.NewGuid(), 3007, 219.90m, DateTimeOffset.UtcNow);
+        var repetida = Pagamento.Criar(correlationId, Guid.NewGuid(), 3007, 219.90m, DateTimeOffset.UtcNow);
+        var segunda = Pagamento.Criar(correlationId, Guid.NewGuid(), 3007, 219.90m, DateTimeOffset.UtcNow, 2);
+
+        primeira.Tentativa.Should().Be(1);
+        segunda.Tentativa.Should().Be(2);
+        repetida.Id.Should().Be(primeira.Id);
+        segunda.Id.Should().NotBe(primeira.Id);
+        segunda.Id.Should().Be(Pagamento.GerarId(correlationId, 2));
+        Pagamento.GerarId(Guid.NewGuid(), 1).Should().NotBe(primeira.Id);
+    }
+
+    [Fact]
+    public void Criar_DeveRejeitarTentativaInvalida()
+    {
+        var action = () => Pagamento.Criar(
+            Guid.NewGuid(), Guid.NewGuid(), 3007, 219.90m, DateTimeOffset.UtcNow, 0);
+
+        action.Should().Throw<ArgumentException>();
+    }
+
     private static Pagamento CriarPagamento() => Pagamento.Criar(
         Guid.NewGuid(), Guid.NewGuid(), 3007, 219.90m, DateTimeOffset.UtcNow);
 }

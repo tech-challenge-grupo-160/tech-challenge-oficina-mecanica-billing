@@ -14,7 +14,8 @@ internal static class PagamentoEventos
         pagamento.OrdemServicoId,
         pagamento.Valor,
         pagamento.Status,
-        pagamento.ConfirmadoEm.Value);
+        pagamento.ConfirmadoEm.Value,
+        Tentativa: pagamento.Tentativa);
 
     public static PagamentoRecusadoMessage Recusado(Pagamento pagamento) => new(
         Guid.NewGuid(),
@@ -26,5 +27,6 @@ internal static class PagamentoEventos
         pagamento.Valor,
         pagamento.Status,
         pagamento.MotivoRecusa!,
-        pagamento.RecusadoEm.Value);
+        pagamento.RecusadoEm.Value,
+        Tentativa: pagamento.Tentativa);
 }

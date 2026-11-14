@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Fiap.TechChallenge.OficinaMecanica.Billing.API.Responses.Pagamentos;
+using Fiap.TechChallenge.OficinaMecanica.Billing.Application.Messaging;
 using Fiap.TechChallenge.OficinaMecanica.Billing.Domain.Entities;
 using Fiap.TechChallenge.OficinaMecanica.Billing.Test.IntegrationTests.Infrastructure;
 using FluentAssertions;
@@ -45,6 +46,23 @@ public sealed class PagamentosControllerTests : IClassFixture<CustomWebApplicati
         var body = await segunda.Content.ReadFromJsonAsync<PagamentoResponse>();
         body!.Status.Should().Be("Confirmado");
         body.ConfirmadoEm.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task PatchSimulado_DeveRecusarPagamentoEPublicarRecusa()
+    {
+        var pagamento = _factory.Pagamentos.Pagamento!;
+        var endpoint = $"/api/v1/pagamentos/ordem-servico/3007/{pagamento.Id}/simular-recusa?motivo=cartao%20sem%20saldo";
+
+        var response = await _client.PatchAsync(endpoint, null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<PagamentoResponse>();
+        body!.Status.Should().Be("Recusado");
+        body.MotivoRecusa.Should().Be("cartao sem saldo");
+        body.Tentativa.Should().Be(1);
+        _factory.Pagamentos.Eventos.OfType<PagamentoRecusadoMessage>()
+            .Should().ContainSingle(evento => evento.PagamentoId == pagamento.Id);
     }
 
     [Fact]

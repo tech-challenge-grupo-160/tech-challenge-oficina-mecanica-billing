@@ -183,6 +183,119 @@ public sealed class PagamentoHandlersTests
             It.IsAny<Pagamento>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task Solicitar_NovaTentativa_DeveCriarSegundoPagamentoAposRecusa()
+    {
+        var orcamento = CriarOrcamentoAprovado();
+        var anterior = Pagamento.Criar(
+            orcamento.CorrelationId, orcamento.Id, 3007, orcamento.ValorTotal, DateTimeOffset.UtcNow);
+        anterior.Recusar(DateTimeOffset.UtcNow, "cancelled: expired");
+        var orcamentos = new Mock<IOrcamentoRepository>();
+        orcamentos.Setup(repository => repository.ObterPorOrdemServicoIdAsync(
+                3007, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orcamento);
+        var pagamentos = new Mock<IPagamentoRepository>();
+        pagamentos.Setup(repository => repository.ObterAsync(3007, anterior.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(anterior);
+        pagamentos.Setup(repository => repository.CriarOuObterAsync(
+                It.IsAny<Pagamento>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Pagamento candidato, Guid _, CancellationToken _) => (candidato, true));
+
+        var result = await new SolicitarPagamentoCommandHandler(orcamentos.Object, pagamentos.Object, Desabilitado())
+            .Handle(new SolicitarPagamentoCommand(
+                Guid.NewGuid(), orcamento.CorrelationId, orcamento.Id, 3007, DateTimeOffset.UtcNow, 2),
+                CancellationToken.None);
+
+        result.Status.Should().Be("Pendente");
+        result.Tentativa.Should().Be(2);
+        result.Id.Should().Be(Pagamento.GerarId(orcamento.CorrelationId, 2));
+        result.Id.Should().NotBe(anterior.Id);
+    }
+
+    [Fact]
+    public async Task Solicitar_NovaTentativa_DeveRejeitarQuandoAnteriorNaoFoiRecusada()
+    {
+        var orcamento = CriarOrcamentoAprovado();
+        var anterior = Pagamento.Criar(
+            orcamento.CorrelationId, orcamento.Id, 3007, orcamento.ValorTotal, DateTimeOffset.UtcNow);
+        var orcamentos = new Mock<IOrcamentoRepository>();
+        orcamentos.Setup(repository => repository.ObterPorOrdemServicoIdAsync(
+                3007, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orcamento);
+        var pagamentos = new Mock<IPagamentoRepository>();
+        pagamentos.Setup(repository => repository.ObterAsync(3007, anterior.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(anterior);
+
+        var action = () => new SolicitarPagamentoCommandHandler(orcamentos.Object, pagamentos.Object, Desabilitado())
+            .Handle(new SolicitarPagamentoCommand(
+                Guid.NewGuid(), orcamento.CorrelationId, orcamento.Id, 3007, DateTimeOffset.UtcNow, 2),
+                CancellationToken.None);
+
+        await action.Should().ThrowAsync<InvalidOperationException>();
+        pagamentos.Verify(repository => repository.CriarOuObterAsync(
+            It.IsAny<Pagamento>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Recusar_DevePersistirEventoComMotivoETentativa()
+    {
+        var pagamento = CriarPagamento();
+        PagamentoRecusadoMessage? evento = null;
+        var repository = new Mock<IPagamentoRepository>();
+        repository.Setup(item => item.ObterAsync(3007, pagamento.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagamento);
+        repository.Setup(item => item.RecusarAsync(
+                pagamento, It.IsAny<PagamentoRecusadoMessage>(), It.IsAny<CancellationToken>()))
+            .Callback<Pagamento, PagamentoRecusadoMessage, CancellationToken>(
+                (_, message, _) => evento = message)
+            .ReturnsAsync(() => (pagamento, true));
+
+        var result = await new RecusarPagamentoCommandHandler(repository.Object)
+            .Handle(new RecusarPagamentoCommand(3007, pagamento.Id, "simulado"), CancellationToken.None);
+
+        result.Status.Should().Be("Recusado");
+        result.MotivoRecusa.Should().Be("simulado");
+        evento!.Motivo.Should().Be("simulado");
+        evento.Tentativa.Should().Be(1);
+        evento.RecusadoEm.Should().Be(pagamento.RecusadoEm);
+    }
+
+    [Fact]
+    public async Task Recusar_DeveSerIdempotente()
+    {
+        var pagamento = CriarPagamento();
+        pagamento.Recusar(DateTimeOffset.UtcNow, "primeira");
+        var repository = new Mock<IPagamentoRepository>();
+        repository.Setup(item => item.ObterAsync(3007, pagamento.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagamento);
+
+        var result = await new RecusarPagamentoCommandHandler(repository.Object)
+            .Handle(new RecusarPagamentoCommand(3007, pagamento.Id, "segunda"), CancellationToken.None);
+
+        result.MotivoRecusa.Should().Be("primeira");
+        repository.Verify(item => item.RecusarAsync(
+            It.IsAny<Pagamento>(), It.IsAny<PagamentoRecusadoMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Recusar_DeveRetornarNotFoundQuandoPagamentoNaoExistir()
+    {
+        var action = () => new RecusarPagamentoCommandHandler(Mock.Of<IPagamentoRepository>())
+            .Handle(new RecusarPagamentoCommand(3007, Guid.NewGuid(), "simulado"), CancellationToken.None);
+
+        await action.Should().ThrowAsync<ServiceNotFoundException>();
+    }
+
+    [Fact]
+    public void Validators_DevemRejeitarRecusaETentativaInvalidas()
+    {
+        new RecusarPagamentoCommandValidator().Validate(
+            new RecusarPagamentoCommand(0, Guid.Empty, "")).IsValid.Should().BeFalse();
+        new SolicitarPagamentoCommandValidator().Validate(new SolicitarPagamentoCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 3007, DateTimeOffset.UtcNow, 0))
+            .IsValid.Should().BeFalse();
+    }
+
     private static IMercadoPagoGateway Desabilitado() =>
         Mock.Of<IMercadoPagoGateway>(gateway => gateway.Habilitado == false);
 

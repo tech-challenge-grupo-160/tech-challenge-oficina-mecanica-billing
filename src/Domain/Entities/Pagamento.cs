@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Fiap.TechChallenge.OficinaMecanica.Billing.Domain.Entities;
 
 public sealed class Pagamento
@@ -28,6 +31,12 @@ public sealed class Pagamento
     /// <summary>Id do pagamento no Mercado Pago que levou ao desfecho.</summary>
     public string? MercadoPagoPagamentoId { get; private set; }
 
+    /// <summary>
+    /// Numero da cobranca na saga da OS. A primeira e 1; cada nova tentativa,
+    /// pedida pelo OS Service depois de uma recusa (F4-27), soma 1.
+    /// </summary>
+    public int Tentativa { get; private set; } = 1;
+
     public bool PossuiCobranca => !string.IsNullOrWhiteSpace(CobrancaId);
 
     public static Pagamento Criar(
@@ -35,7 +44,8 @@ public sealed class Pagamento
         Guid orcamentoId,
         int ordemServicoId,
         decimal valor,
-        DateTimeOffset criadoEm)
+        DateTimeOffset criadoEm,
+        int tentativa = 1)
     {
         if (correlationId == Guid.Empty)
             throw new ArgumentException("CorrelationId e obrigatorio.", nameof(correlationId));
@@ -45,17 +55,34 @@ public sealed class Pagamento
             throw new ArgumentException("OrdemServicoId deve ser maior que zero.", nameof(ordemServicoId));
         if (valor <= 0)
             throw new ArgumentException("Valor do pagamento deve ser maior que zero.", nameof(valor));
+        if (tentativa <= 0)
+            throw new ArgumentException("Tentativa deve ser maior que zero.", nameof(tentativa));
 
         return new Pagamento
         {
-            Id = Guid.NewGuid(),
+            Id = GerarId(correlationId, tentativa),
             CorrelationId = correlationId,
             OrcamentoId = orcamentoId,
             OrdemServicoId = ordemServicoId,
             Valor = valor,
             Status = StatusPendente,
-            CriadoEm = criadoEm
+            CriadoEm = criadoEm,
+            Tentativa = tentativa
         };
+    }
+
+    /// <summary>
+    /// Id deterministico por saga e tentativa. Dois comandos para a mesma
+    /// tentativa (mesmo com MessageId diferente) caem no mesmo item do DynamoDB,
+    /// entao nunca existem duas cobrancas para a mesma tentativa.
+    /// </summary>
+    public static Guid GerarId(Guid correlationId, int tentativa)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"pagamento:{correlationId:N}:{tentativa}"));
+        var bytes = hash[..16];
+        bytes[7] = (byte)((bytes[7] & 0x0F) | 0x50); // versao 5 (baseado em nome)
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80); // variante RFC 4122
+        return new Guid(bytes);
     }
 
     /// <summary>
@@ -123,8 +150,10 @@ public sealed class Pagamento
         string? motivoRecusa = null,
         string? cobrancaId = null,
         string? linkPagamento = null,
-        string? mercadoPagoPagamentoId = null) => new()
+        string? mercadoPagoPagamentoId = null,
+        int tentativa = 1) => new()
         {
+            Tentativa = tentativa,
             Id = id,
             CorrelationId = correlationId,
             OrcamentoId = orcamentoId,

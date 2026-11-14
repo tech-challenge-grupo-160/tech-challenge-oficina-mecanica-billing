@@ -10,5 +10,6 @@ public sealed class SolicitarPagamentoCommandValidator : AbstractValidator<Solic
         RuleFor(command => command.CorrelationId).NotEmpty();
         RuleFor(command => command.OrcamentoId).NotEmpty();
         RuleFor(command => command.OrdemServicoId).GreaterThan(0);
+        RuleFor(command => command.Tentativa).GreaterThan(0);
     }
 }

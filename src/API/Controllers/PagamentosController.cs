@@ -38,4 +38,29 @@ public sealed class PagamentosController(ISender sender, IWebHostEnvironment env
             cancellationToken);
         return Ok(PagamentoResponse.From(result));
     }
+
+    /// <summary>
+    /// Provoca a recusa do pagamento (so em Development/Testing) para exercitar
+    /// a compensacao de pagamento recusado (F4-27).
+    /// </summary>
+    [HttpPatch("ordem-servico/{ordemServicoId:int}/{pagamentoId:guid}/simular-recusa")]
+    [ProducesResponseType<PagamentoResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PagamentoResponse>> SimularRecusa(
+        int ordemServicoId,
+        Guid pagamentoId,
+        [FromQuery] string? motivo,
+        CancellationToken cancellationToken)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+            return NotFound();
+
+        var result = await sender.Send(
+            new RecusarPagamentoCommand(
+                ordemServicoId,
+                pagamentoId,
+                string.IsNullOrWhiteSpace(motivo) ? "simulado: pagamento recusado" : motivo),
+            cancellationToken);
+        return Ok(PagamentoResponse.From(result));
+    }
 }
