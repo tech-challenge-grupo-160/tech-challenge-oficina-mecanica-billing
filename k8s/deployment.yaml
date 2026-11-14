@@ -5,6 +5,11 @@ metadata:
   labels:
     app: oficina-mecanica-billing
     app.kubernetes.io/part-of: oficina-mecanica
+    # Unified service tagging no Deployment (F4-31). O version vem da tag da
+    # imagem, copiada pela replacement do kustomization.yaml.
+    tags.datadoghq.com/service: oficina-mecanica-billing
+    tags.datadoghq.com/env: __AMBIENTE__
+    tags.datadoghq.com/version: placeholder
 spec:
   replicas: 2
   selector:
@@ -19,6 +24,9 @@ spec:
         # service/env no Datadog, para o log abrir o trace e vice-versa (F4-32).
         tags.datadoghq.com/service: oficina-mecanica-billing
         tags.datadoghq.com/env: __AMBIENTE__
+        # Tag da imagem (SHA do commit), copiada pela replacement do
+        # kustomization.yaml: cada deploy vira uma versao no APM (F4-31).
+        tags.datadoghq.com/version: placeholder
       annotations:
         # source csharp aplica o pipeline de logs .NET do Datadog; o JSON do
         # servico ja traz dd.trace_id/dd.span_id para a correlacao com o trace.
@@ -38,10 +46,21 @@ spec:
             - secretRef:
                 name: oficina-mecanica-billing-secret
           env:
+            # Unified service tagging do tracer e do DogStatsD lido dos labels do
+            # pod, para env/service/version do APM nunca divergirem dos labels
+            # (F4-31). DD_ENV separa os ambientes (dev/hom/prod) no Datadog.
             - name: DD_SERVICE
-              value: oficina-mecanica-billing
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
             - name: DD_ENV
-              value: __AMBIENTE__
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
             - name: DD_AGENT_HOST
               valueFrom:
                 fieldRef:

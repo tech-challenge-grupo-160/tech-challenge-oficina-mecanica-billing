@@ -2,6 +2,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Amazon.SQS;
 using Amazon.SQS.Model;
+using Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure.Logging;
+using Fiap.TechChallenge.OficinaMecanica.Billing.Infrastructure.Observability;
 using Fiap.TechChallenge.OficinaMecanica.Billing.Shared.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -34,7 +36,9 @@ public abstract class SqsCommandConsumerWorker<TMessage>(
                     QueueUrl = QueueUrl,
                     MaxNumberOfMessages = 10,
                     WaitTimeSeconds = 10,
-                    VisibilityTimeout = 30
+                    VisibilityTimeout = 30,
+                    // Contexto do trace de quem publicou (F4-31).
+                    MessageAttributeNames = [MensageriaTrace.AtributoMensagem]
                 }, stoppingToken);
 
                 foreach (var message in response.Messages ?? [])
@@ -54,10 +58,19 @@ public abstract class SqsCommandConsumerWorker<TMessage>(
 
     private async Task ProcessarAsync(Message message, CancellationToken cancellationToken)
     {
+        // Processa como filho do trace de quem publicou (F4-31).
+        using var span = MensageriaTrace.IniciarConsumo(
+            MensageriaTrace.LerAtributo(message.MessageAttributes),
+            typeof(TMessage).Name,
+            QueueUrl);
         try
         {
             var comando = JsonSerializer.Deserialize<TMessage>(message.Body, JsonOptions)
                 ?? throw new InvalidOperationException($"Comando {typeof(TMessage).Name} invalido.");
+            MensageriaTrace.IdentificarMensagem(
+                span,
+                LerCorrelationId(message.Body),
+                OutboxLogContexto.LerOrdemServicoId(message.Body));
 
             // correlationId e numero da OS em todos os logs do processamento.
             using var contexto = logger.IniciarParaMensagem(comando, typeof(TMessage).Name);
@@ -68,11 +81,29 @@ public abstract class SqsCommandConsumerWorker<TMessage>(
         }
         catch (Exception exception)
         {
+            span.Span.SetException(exception);
             logger.LogError(
                 exception,
                 "Falha ao processar comando {TipoMensagem} com ID SQS {SqsMessageId}.",
                 typeof(TMessage).Name,
                 message.MessageId);
+        }
+    }
+
+    private static Guid? LerCorrelationId(string corpo)
+    {
+        try
+        {
+            using var documento = JsonDocument.Parse(corpo);
+            return documento.RootElement.ValueKind == JsonValueKind.Object &&
+                   documento.RootElement.TryGetProperty("correlationId", out var valor) &&
+                   valor.TryGetGuid(out var correlationId)
+                ? correlationId
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
