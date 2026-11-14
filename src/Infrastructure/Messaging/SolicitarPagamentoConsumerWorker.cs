@@ -34,6 +34,7 @@ public sealed class SolicitarPagamentoConsumerWorker(
             comando.CorrelationId,
             comando.OrcamentoId,
             comando.OrdemServicoId,
-            comando.OcorridoEm), cancellationToken);
+            comando.OcorridoEm,
+            comando.Tentativa), cancellationToken);
     }
 }

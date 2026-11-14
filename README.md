@@ -44,6 +44,21 @@ O pagamento usa o **Checkout Pro**, em ambiente de teste.
    vez (escrita condicional no DynamoDB, junto com a Outbox), então o evento é
    publicado uma única vez e o webhook responde `200` com desfecho `Duplicada`.
 
+### Pagamento recusado e nova tentativa (F4-27)
+
+O pagamento é o passo **repetível** da Saga (ADR-0004): depois de uma recusa
+nada é desfeito, e o OS Service pede uma nova cobrança com
+`SolicitarPagamentoMessage` e `tentativa` + 1.
+
+- Cada tentativa é um `Pagamento` próprio, com Id derivado da saga e da tentativa
+  (`Pagamento.GerarId`). Comandos repetidos para a mesma tentativa caem no mesmo
+  item do DynamoDB, então não há cobrança duplicada.
+- A tentativa N só é aceita se a N-1 estiver `Recusado`.
+- `GET /api/v1/pagamentos/ordem-servico/{ordemServicoId}` devolve a tentativa
+  mais recente; `tentativa` vem na resposta e nos eventos de pagamento.
+- Fora da nuvem, `PATCH /api/v1/pagamentos/ordem-servico/{ordemServicoId}/{pagamentoId}/simular-recusa?motivo=...`
+  provoca a recusa (só em Development/Testing, como o `simular-confirmacao`).
+
 ### Credenciais
 
 As credenciais ficam no AWS Secrets Manager, em `tc-grupo160/<ambiente>/mercadopago`

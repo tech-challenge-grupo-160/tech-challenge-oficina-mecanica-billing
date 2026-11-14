@@ -7,4 +7,5 @@ public sealed record SolicitarPagamentoCommand(
     Guid CorrelationId,
     Guid OrcamentoId,
     int OrdemServicoId,
-    DateTimeOffset SolicitadoEm) : IRequest<PagamentoResult>;
+    DateTimeOffset SolicitadoEm,
+    int Tentativa = 1) : IRequest<PagamentoResult>;

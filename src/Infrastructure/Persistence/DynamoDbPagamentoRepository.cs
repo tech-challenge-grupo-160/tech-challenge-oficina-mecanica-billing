@@ -55,8 +55,12 @@ public sealed class DynamoDbPagamentoRepository(
         }
         catch (TransactionCanceledException)
         {
-            var existente = await ObterPorOrdemServicoIdAsync(
+            // O Id e deterministico por saga e tentativa (Pagamento.GerarId): a
+            // reentrega do comando, ou outro comando para a mesma tentativa, cai
+            // no mesmo item.
+            var existente = await ObterAsync(
                 candidato.OrdemServicoId,
+                candidato.Id,
                 cancellationToken);
             if (existente is not null && existente.Corresponde(
                     candidato.CorrelationId,
@@ -67,24 +71,40 @@ public sealed class DynamoDbPagamentoRepository(
         }
     }
 
+    /// <summary>
+    /// Devolve o pagamento vigente da OS: o da tentativa mais recente. Depois
+    /// de uma recusa a OS pode ter mais de um pagamento (F4-27).
+    /// </summary>
     public async Task<Pagamento?> ObterPorOrdemServicoIdAsync(
         int ordemServicoId,
         CancellationToken cancellationToken)
     {
-        var response = await dynamoDb.QueryAsync(new QueryRequest
+        var pagamentos = new List<Pagamento>();
+        Dictionary<string, AttributeValue>? inicio = null;
+        do
         {
-            TableName = options.Value.TableName,
-            ConsistentRead = true,
-            KeyConditionExpression = "PK = :pk AND begins_with(SK, :prefixo)",
-            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            var response = await dynamoDb.QueryAsync(new QueryRequest
             {
-                [":pk"] = new(ObterPk(ordemServicoId)),
-                [":prefixo"] = new("PAGAMENTO#")
-            },
-            Limit = 1
-        }, cancellationToken);
+                TableName = options.Value.TableName,
+                ConsistentRead = true,
+                KeyConditionExpression = "PK = :pk AND begins_with(SK, :prefixo)",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    [":pk"] = new(ObterPk(ordemServicoId)),
+                    [":prefixo"] = new("PAGAMENTO#")
+                },
+                ExclusiveStartKey = inicio
+            }, cancellationToken);
 
-        return response.Items.Count == 0 ? null : Restaurar(response.Items[0]);
+            pagamentos.AddRange((response.Items ?? []).Select(Restaurar));
+            inicio = response.LastEvaluatedKey is { Count: > 0 } ? response.LastEvaluatedKey : null;
+        }
+        while (inicio is not null);
+
+        return pagamentos
+            .OrderByDescending(pagamento => pagamento.Tentativa)
+            .ThenByDescending(pagamento => pagamento.CriadoEm)
+            .FirstOrDefault();
     }
 
     public async Task<Pagamento?> ObterAsync(
@@ -247,7 +267,8 @@ public sealed class DynamoDbPagamentoRepository(
             ["OrdemServicoId"] = new() { N = pagamento.OrdemServicoId.ToString(CultureInfo.InvariantCulture) },
             ["Valor"] = new() { N = pagamento.Valor.ToString(CultureInfo.InvariantCulture) },
             ["Status"] = new(pagamento.Status),
-            ["CriadoEm"] = new(pagamento.CriadoEm.ToString("O", CultureInfo.InvariantCulture))
+            ["CriadoEm"] = new(pagamento.CriadoEm.ToString("O", CultureInfo.InvariantCulture)),
+            ["Tentativa"] = new() { N = pagamento.Tentativa.ToString(CultureInfo.InvariantCulture) }
         };
         if (pagamento.ConfirmadoEm.HasValue)
             item["ConfirmadoEm"] = new(pagamento.ConfirmadoEm.Value.ToString("O", CultureInfo.InvariantCulture));
@@ -299,5 +320,9 @@ public sealed class DynamoDbPagamentoRepository(
             LerTexto(item, "MotivoRecusa"),
             LerTexto(item, "CobrancaId"),
             LerTexto(item, "LinkPagamento"),
-            LerTexto(item, "MercadoPagoPagamentoId"));
+            LerTexto(item, "MercadoPagoPagamentoId"),
+            // Itens gravados antes da F4-27 nao tem Tentativa: eram a primeira.
+            item.TryGetValue("Tentativa", out var tentativa)
+                ? int.Parse(tentativa.N, CultureInfo.InvariantCulture)
+                : 1);
 }

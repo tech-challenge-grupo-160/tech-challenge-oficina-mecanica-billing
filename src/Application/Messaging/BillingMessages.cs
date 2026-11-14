@@ -65,7 +65,8 @@ public sealed record SolicitarPagamentoMessage(
     DateTimeOffset OcorridoEm,
     Guid OrcamentoId,
     int OrdemServicoId,
-    int Versao = 1);
+    int Versao = 1,
+    int Tentativa = 1);
 
 public sealed record PagamentoConfirmadoMessage(
     Guid MessageId,
@@ -77,7 +78,8 @@ public sealed record PagamentoConfirmadoMessage(
     decimal Valor,
     string Status,
     DateTimeOffset ConfirmadoEm,
-    int Versao = 1);
+    int Versao = 1,
+    int Tentativa = 1);
 
 public sealed record PagamentoRecusadoMessage(
     Guid MessageId,
@@ -90,4 +92,5 @@ public sealed record PagamentoRecusadoMessage(
     string Status,
     string Motivo,
     DateTimeOffset RecusadoEm,
-    int Versao = 1);
+    int Versao = 1,
+    int Tentativa = 1);
