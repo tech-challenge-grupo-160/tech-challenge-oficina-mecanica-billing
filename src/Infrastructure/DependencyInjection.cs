@@ -32,11 +32,14 @@ public static class DependencyInjection
 
         services.AddScoped<IOrcamentoRepository, DynamoDbOrcamentoRepository>();
         services.AddScoped<IPagamentoRepository, DynamoDbPagamentoRepository>();
+        // Antes dos workers: os hosted services sobem na ordem de registro, e o
+        // StartupCheck do Mercado Pago carrega as credenciais antes de qualquer
+        // comando de pagamento ser consumido.
+        services.AddMercadoPago(configuration);
         services.AddHostedService<DynamoDbTableInitializer>();
         services.AddHostedService<GerarOrcamentoConsumerWorker>();
         services.AddHostedService<SolicitarPagamentoConsumerWorker>();
         services.AddHostedService<OutboxSnsPublisherWorker>();
-        services.AddMercadoPago(configuration);
         services.AddHealthChecks();
 
         return services;
