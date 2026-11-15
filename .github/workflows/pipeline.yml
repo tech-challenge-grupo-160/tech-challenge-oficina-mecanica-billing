@@ -30,4 +30,16 @@ jobs:
       imagem: billing
       regiao_aws: ${{ vars.AWS_REGION || 'us-east-1' }}
       ambiente: ${{ github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.event_name == 'push' && (github.ref_name == 'main' && 'producao' || 'homologacao')) || '' }}
+      # Enderecos de mensageria (F4-11), montados no oficina-mecanica-billing-secret
+      # a cada deploy a partir do Secrets Manager, como no OS Service. As
+      # chaves sao as do segredo criado pelo Terraform deste repositorio
+      # (infra/messaging.tf), com os nomes que o codigo le: uma fila por tipo de
+      # mensagem, como no LocalStack (adendo de 11/11 a ADR-0005).
+      # Messaging__Enabled vem do mesmo segredo e liga os workers.
+      # O nome da tabela DynamoDB (F4-13) vem do configmap, nao daqui.
+      segredos: |
+        Messaging__Enabled=tc-grupo160/{sufixo}/billing/messaging#Messaging__Enabled
+        Messaging__EventosTopicArn=tc-grupo160/{sufixo}/billing/messaging#Messaging__EventosTopicArn
+        Messaging__GerarOrcamentoQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__GerarOrcamentoQueueUrl
+        Messaging__SolicitarPagamentoQueueUrl=tc-grupo160/{sufixo}/billing/messaging#Messaging__SolicitarPagamentoQueueUrl
     secrets: inherit
