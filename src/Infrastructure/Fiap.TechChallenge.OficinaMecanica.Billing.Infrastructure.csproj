@@ -19,6 +19,10 @@
     <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.0.100.16" />
     <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.11" />
     <PackageReference Include="AWSSDK.SQS" Version="4.0.100.16" />
+    <!-- API manual do tracer (SpanContextInjector/Extractor) para propagar o trace
+         pela Outbox e pelo SNS/SQS (F4-31). Mesma versao do tracer da imagem
+         (DD_TRACE_VERSION no Dockerfile): sem o profiler a API nao faz nada. -->
+    <PackageReference Include="Datadog.Trace" Version="3.53.0" />
   </ItemGroup>
 
 </Project>
