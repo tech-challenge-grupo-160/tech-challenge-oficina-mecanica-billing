@@ -156,6 +156,54 @@ public sealed class MercadoPagoCredenciaisTests
     }
 
     [Fact]
+    public async Task StartupCheck_DeveCarregarComAwaitSemBloquearAThread()
+    {
+        // Ate 15/11 a leitura era sincrona e travava o pod no startup do cluster.
+        var leitura = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var options = Options.Create(new MercadoPagoOptions { Enabled = true, SecretId = "tc-grupo160/dev/mercadopago" });
+        var provider = new MercadoPagoCredenciaisProvider(
+            options, (_, _) => leitura.Task, MercadoPagoCredenciaisProvider.TempoLimitePadrao);
+        var check = new MercadoPagoCredenciaisStartupCheck(provider, options, new LoggerFake());
+
+        var start = check.StartAsync(CancellationToken.None);
+
+        start.IsCompleted.Should().BeFalse();
+        leitura.SetResult(SegredoValido);
+        await start;
+        provider.Disponivel.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task StartupCheck_LeituraQueNaoTerminaDeveEsgotarOTempoEAvisar()
+    {
+        var options = Options.Create(new MercadoPagoOptions { Enabled = true, SecretId = "tc-grupo160/dev/mercadopago" });
+        var logger = new LoggerFake();
+        var provider = new MercadoPagoCredenciaisProvider(
+            options, (_, _) => new TaskCompletionSource<string>().Task, TimeSpan.FromMilliseconds(50));
+        var check = new MercadoPagoCredenciaisStartupCheck(provider, options, logger);
+
+        await check.StartAsync(CancellationToken.None);
+
+        provider.Disponivel.Should().BeFalse();
+        logger.Avisos.Should().ContainSingle().Which.Should().Contain("Tempo esgotado").And.Contain("tc-grupo160/dev/mercadopago");
+    }
+
+    [Fact]
+    public async Task Provider_CarregarAsyncDeveLerOSegredoUmaVez()
+    {
+        var leituras = 0;
+        var provider = new MercadoPagoCredenciaisProvider(
+            Options.Create(new MercadoPagoOptions { SecretId = "tc-grupo160/dev/mercadopago" }),
+            (_, _) => { Interlocked.Increment(ref leituras); return Task.FromResult(SegredoValido); },
+            MercadoPagoCredenciaisProvider.TempoLimitePadrao);
+
+        await Task.WhenAll(provider.CarregarAsync(), provider.CarregarAsync(), provider.CarregarAsync());
+
+        leituras.Should().Be(1);
+        provider.Obter().AccessToken.Should().Be("TEST-token");
+    }
+
+    [Fact]
     public async Task StartupCheck_NaoDeveLerQuandoDesabilitado()
     {
         var options = Options.Create(new MercadoPagoOptions { Enabled = false });
