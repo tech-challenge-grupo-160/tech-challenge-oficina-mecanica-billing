@@ -21,7 +21,7 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
     {
         if (!_validators.Any())
         {
-            return await next();
+            return await next(cancellationToken);
         }
 
         var context = new ValidationContext<TRequest>(request);
@@ -39,6 +39,6 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
                 string.Join("; ", errors.Select(error => error.ErrorMessage)));
         }
 
-        return await next();
+        return await next(cancellationToken);
     }
 }
