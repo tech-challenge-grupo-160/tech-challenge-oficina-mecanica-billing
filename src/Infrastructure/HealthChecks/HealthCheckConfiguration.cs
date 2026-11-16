@@ -41,6 +41,6 @@ public static class HealthCheckConfiguration
             })
         };
 
-        await context.Response.WriteAsJsonAsync(response);
+        await context.Response.WriteAsJsonAsync(response, context.RequestAborted);
     }
 }

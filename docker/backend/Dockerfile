@@ -15,10 +15,10 @@ COPY . .
 ENV DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true
 
 EXPOSE 8080
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_HTTP_PORTS=8080
 ENV ASPNETCORE_ENVIRONMENT=Development
 
-ENTRYPOINT ["dotnet", "watch", "run", "--project", "src/API/Fiap.TechChallenge.OficinaMecanica.Billing.Api.csproj", "--urls", "http://+:8080"]
+ENTRYPOINT ["dotnet", "watch", "run", "--project", "src/API/Fiap.TechChallenge.OficinaMecanica.Billing.Api.csproj"]
 
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -39,7 +39,7 @@ FROM alpine:3.22 AS datadog-tracer
 ARG DD_TRACE_VERSION=3.53.0
 RUN apk add --no-cache curl tar \
     && mkdir -p /opt/datadog \
-    && curl --fail --silent --show-error --location \
+    && curl --proto "=https" --tlsv1.2 --fail --silent --show-error --location \
         "https://github.com/DataDog/dd-trace-dotnet/releases/download/v${DD_TRACE_VERSION}/datadog-dotnet-apm-${DD_TRACE_VERSION}-musl.tar.gz" \
         | tar -xzf - -C /opt/datadog \
     && mkdir -p /var/log/datadog/dotnet
@@ -52,14 +52,14 @@ WORKDIR /app
 RUN apk add --no-cache krb5-libs
 
 EXPOSE 8080
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_HTTP_PORTS=8080
 ENV CORECLR_ENABLE_PROFILING=1
 ENV CORECLR_PROFILER={846F5F1C-F9AE-4B07-969E-05C26BC060D8}
 ENV CORECLR_PROFILER_PATH=/opt/datadog/Datadog.Trace.ClrProfiler.Native.so
 ENV DD_DOTNET_TRACER_HOME=/opt/datadog
 ENV DD_TRACE_ENABLED=true
 ENV DD_SERVICE=oficina-mecanica-billing
-ENV DD_ENV=Development
+ENV DD_ENV=local
 ENV DD_VERSION=unknown
 # Coloca dd.trace_id e dd.span_id nos logs, ligando cada log ao trace (F4-32).
 ENV DD_LOGS_INJECTION=true
