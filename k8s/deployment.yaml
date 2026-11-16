@@ -5,6 +5,11 @@ metadata:
   labels:
     app: oficina-mecanica-billing
     app.kubernetes.io/part-of: oficina-mecanica
+    # Unified service tagging no Deployment (F4-31). O version vem da tag da
+    # imagem, copiada pela replacement do kustomization.yaml.
+    tags.datadoghq.com/service: oficina-mecanica-billing
+    tags.datadoghq.com/env: __AMBIENTE__
+    tags.datadoghq.com/version: placeholder
 spec:
   replicas: 2
   selector:
@@ -15,6 +20,17 @@ spec:
       labels:
         app: oficina-mecanica-billing
         app.kubernetes.io/part-of: oficina-mecanica
+        # Unified service tagging: logs, traces e metricas do pod com o mesmo
+        # service/env no Datadog, para o log abrir o trace e vice-versa (F4-32).
+        tags.datadoghq.com/service: oficina-mecanica-billing
+        tags.datadoghq.com/env: __AMBIENTE__
+        # Tag da imagem (SHA do commit), copiada pela replacement do
+        # kustomization.yaml: cada deploy vira uma versao no APM (F4-31).
+        tags.datadoghq.com/version: placeholder
+      annotations:
+        # source csharp aplica o pipeline de logs .NET do Datadog; o JSON do
+        # servico ja traz dd.trace_id/dd.span_id para a correlacao com o trace.
+        ad.datadoghq.com/api.logs: '[{"source":"csharp","service":"oficina-mecanica-billing"}]'
     spec:
       containers:
         - name: api
@@ -25,15 +41,38 @@ spec:
           envFrom:
             - configMapRef:
                 name: oficina-mecanica-billing-config
+            # Montado pela pipeline a partir do Secrets Manager (input segredos);
+            # nunca versionado. Sem ele o pod nao sobe, o que e o desejado.
+            - secretRef:
+                name: oficina-mecanica-billing-secret
           env:
+            # Unified service tagging do tracer e do DogStatsD lido dos labels do
+            # pod, para env/service/version do APM nunca divergirem dos labels
+            # (F4-31). DD_ENV separa os ambientes (dev/hom/prod) no Datadog.
             - name: DD_SERVICE
-              value: oficina-mecanica-billing
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
             - name: DD_ENV
-              value: __AMBIENTE__
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
             - name: DD_AGENT_HOST
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            # Mercado Pago (F4-20): o pod recebe so o nome do segredo e le
+            # access token e assinatura do webhook no Secrets Manager no startup
+            # (LabRole). Sem o segredo preenchido o pod sobe sem cobranca no Mercado
+            # Pago: os orcamentos funcionam e o webhook responde 404.
+            - name: MercadoPago__Enabled
+              value: "true"
+            - name: MercadoPago__SecretId
+              value: tc-grupo160/__AMBIENTE__/mercadopago
           # readiness inclui as dependencias; liveness so confere o processo,
           # para uma dependencia fora do ar nao reiniciar o pod a toa.
           readinessProbe:
@@ -52,10 +91,13 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+          # Request de memoria igual ao do OS Service (256Mi). Com 128Mi o HPA via
+          # 81% de uso medio so com o runtime do .NET subido, acima do alvo de 75%,
+          # e escalava sem carga (ensaio de 09/11 no dev, F4-38). Limit segue 512Mi.
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
             limits:
               cpu: 500m
               memory: 512Mi

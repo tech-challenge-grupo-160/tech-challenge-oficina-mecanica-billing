@@ -11,11 +11,17 @@ public static partial class SensitiveDataMasker
             return value ?? string.Empty;
         }
 
-        var masked = CpfRegex().Replace(value, "***.***.***-**");
+        // CNPJ antes do CPF: os 11 primeiros digitos de um CNPJ sem pontuacao
+        // nao podem virar um "CPF" mascarado pela metade.
+        var masked = CnpjRegex().Replace(value, "**.***.***/****-**");
+        masked = CpfRegex().Replace(masked, "***.***.***-**");
         masked = BearerTokenRegex().Replace(masked, "$1[REDACTED]");
         masked = JwtRegex().Replace(masked, "[REDACTED]");
         return SensitiveKeyValueRegex().Replace(masked, "$1[REDACTED]");
     }
+
+    [GeneratedRegex(@"(?<!\d)\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}(?!\d)", RegexOptions.CultureInvariant)]
+    private static partial Regex CnpjRegex();
 
     [GeneratedRegex(@"(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)", RegexOptions.CultureInvariant)]
     private static partial Regex CpfRegex();
